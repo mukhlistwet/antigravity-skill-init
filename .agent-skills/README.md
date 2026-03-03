@@ -68,7 +68,7 @@ repository to the current project.
 
 ---
 
-## Skills List (57 functional)
+## Skills List (58 functional)
 
 > Skills marked *(in development)* exist on disk but do not yet have a SKILL.toon file.
 
@@ -112,7 +112,7 @@ repository to the current project.
 | `performance-optimization` | Performance optimization | All platforms |
 | `testing-strategies` | Testing strategies | All platforms |
 
-### Infrastructure (8)
+### Infrastructure (9)
 | Skill | Description | Platforms |
 |-------|-------------|-----------|
 | `deployment-automation` | CI/CD & deployment automation | All platforms |
@@ -123,6 +123,7 @@ repository to the current project.
 | `security-best-practices` | Security best practices | All platforms |
 | `system-environment-setup` | Environment configuration | All platforms |
 | `vercel-deploy` | Vercel deployment | All platforms |
+| `llm-monitoring-dashboard` | LLM 사용 모니터링 대시보드 (Tokuin CLI 기반 비용·토큰·레이턴시 + PM 인사이트 + 사용자 랭킹) | All platforms |
 
 ### Documentation (4)
 | Skill | Description | Platforms |
@@ -300,4 +301,4 @@ npx skills add <skill-name>
 
 ---
 
-**Version**: 4.5.0 | **Updated**: 2026-02-24 | **Skills**: 57 functional | **Format**: TOON (Default) | **Structure**: Flat
+**Version**: 4.6.0 | **Updated**: 2026-03-03 | **Skills**: 58 functional | **Format**: TOON (Default) | **Structure**: Flat

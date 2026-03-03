@@ -1,9 +1,9 @@
 # Agent Skills
 
-> v2026-02-25 · **65 Skills** · **TOON Format** · **Flat Skill Layout**
+> v2026-03-03 · **66 Skills** · **TOON Format** · **Flat Skill Layout**
 
 [![GitHub Releases](https://img.shields.io/badge/GitHub-Releases-blue)](https://github.com/supercent-io/skills-template/releases)
-[![Skills](https://img.shields.io/badge/Skills-65-brightgreen)](#skills-list-65-total)
+[![Skills](https://img.shields.io/badge/Skills-66-brightgreen)](#skills-list-66-total)
 [![BMAD Deploy Version](https://img.shields.io/badge/BMAD-1.0.0-orange)](docs/bmad/README.md)
 
 ![Agent Skills Installer](AgentSkills.png)
@@ -18,7 +18,7 @@
 - [What's New](#whats-new-in-v2026-02-25)
 - [설치 (Install)](#설치-install)
 - [실행 가이드](#실행-가이드)
-- [Skills List (65)](#skills-list-65-total)
+- [Skills List (66)](#skills-list-66-total)
 - [Featured Tools](#featured-tools)
 - [Structure](#structure)
 - [Related docs](#related-docs)
@@ -172,7 +172,7 @@ npx skills add https://github.com/supercent-io/skills-template --skill playwrite
 
 ---
 
-## Skills List (65 total)
+## Skills List (66 total)
 
 > Full manifest + descriptions: `.agent-skills/skills.json` · each folder's `SKILL.md`
 
@@ -220,7 +220,7 @@ npx skills add https://github.com/supercent-io/skills-template --skill playwrite
 | `performance-optimization` | Performance optimization | All platforms |
 | `testing-strategies` | Testing strategies | All platforms |
 
-### Infrastructure (8)
+### Infrastructure (9)
 
 | Skill | Description | Platforms |
 |-------|-------------|-----------|
@@ -232,6 +232,7 @@ npx skills add https://github.com/supercent-io/skills-template --skill playwrite
 | `security-best-practices` | Security best practices | All platforms |
 | `system-environment-setup` | Environment configuration | All platforms |
 | `vercel-deploy` | Vercel deployment | All platforms |
+| `llm-monitoring-dashboard` | LLM 사용 모니터링 대시보드 (Tokuin CLI 기반 비용·토큰·레이턴시 추적 + PM 인사이트 + 사용자 랭킹) | All platforms |
 
 ### Documentation (4)
 
