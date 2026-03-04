@@ -96,7 +96,7 @@ gemini extensions install https://github.com/supercent-io/skills-template
 
 ---
 
-### Step 2: 전체 69개 스킬 설치 (기본 실행 단계)
+### Step 2: 전체 70개 스킬 설치 (기본 실행 단계)
 
 ```bash
 npx skills add https://github.com/supercent-io/skills-template \
@@ -126,7 +126,7 @@ npx skills add https://github.com/supercent-io/skills-template \
   --skill llm-monitoring-dashboard \
   --skill image-generation --skill pollinations-ai \
   --skill video-production --skill marketing-automation \
-  --skill agent-browser --skill copilot-coding-agent \
+  --skill agent-browser --skill agentation --skill copilot-coding-agent \
   --skill ai-tool-compliance \
   --skill environment-setup --skill file-organization \
   --skill git-submodule --skill git-workflow --skill jeo \
@@ -263,6 +263,7 @@ npx skills info jeo
 | `ai-tool-compliance` | `ai-tool-compliance` | 내부 AI 툴 컴플라이언스 자동화(P0/P1) |
 | `agent-browser` | `agent-browser` | 헤드리스 브라우저 자동화 |
 | `llm-monitoring-dashboard` | `llm-monitoring-dashboard` | LLM 사용량 모니터링 대시보드 생성 |
+| `agentation` | `agentui` | 계획·diff 시각화 검토 UI (agentui 루프) |
 | `oh-my-codex` | `omx` | Codex CLI 멀티에이전트 |
 | `ohmg` | `ohmg` | Gemini / Antigravity 워크플로우 |
 
