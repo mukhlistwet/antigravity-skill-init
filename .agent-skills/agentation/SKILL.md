@@ -599,6 +599,73 @@ import {
 
 ---
 
+## 12. jeo Integration (agentui keyword)
+
+> agentation은 jeo 스킬의 **VERIFY_UI** 단계로 통합됩니다.
+> plannotator가 `planui` / `ExitPlanMode`에서 동작하는 방식과 동일한 패턴입니다.
+
+### 엄게나 작동 방식
+
+```
+plannotator (planui):         agentation (agentui):
+plan.md 작성                   앱 UI에 <Agentation> 마운트
+    ↓ 블로킹                        ↓ 블로킹
+plannotator 실행            agentation_watch_annotations
+    ↓                              ↓
+UI에서 Approve/Feedback       UI에서 어노테이션 생성
+    ↓                              ↓
+approved:true 확인             annotation ack→fix→resolve
+    ↓                              ↓
+EXECUTE 진입                  다음 단계 또는 루프
+```
+
+### 트리거 키워드
+
+| 키워드 | 플랫폼 | 동작 |
+|--------|----------|------|
+| `agentui` | Claude Code | `agentation_watch_annotations` MCP 블로킹 호출 |
+| `agentui` | Codex | `AGENTUI_READY` 신호 → `jeo-notify.py` HTTP 폴링 |
+| `agentui` | Gemini | GEMINI.md 지시: HTTP REST 폴링 패턴 |
+| `/jeo-agentui` | OpenCode | opencode.json `mcp.agentation` + 지시사항 |
+
+### jeo에서 사용하기
+
+```bash
+# 1. jeo 실치 시 agentation 자동 등록
+bash .agent-skills/jeo/scripts/install.sh --with-agentation
+# 또는 전체 설치:
+bash .agent-skills/jeo/scripts/install.sh --all
+
+# 2. 앱에 agentation 컴포넌트 마운트
+# app/layout.tsx 또는 pages/_app.tsx:
+#   <Agentation endpoint="http://localhost:4747" />
+
+# 3. MCP 서버 실행
+npx agentation-mcp server
+
+# 4. 에이전트에서 agentui 키워드 입력 → watch loop 시작
+# Claude Code: MCP 도구 직접 호출
+# Codex: AGENTUI_READY 출력 → notify hook 자동 폴링
+# Gemini: GEMINI.md HTTP 폴링 패턴
+# OpenCode: /jeo-agentui 슬래시 커맨드
+```
+
+### 평가 플로우 (jeo VERIFY_UI 단계)
+
+```
+jeo "<task>"
+    │
+[1] PLAN (plannotator loop)    ← plan.md 승인
+[2] EXECUTE (team/bmad)
+[3] VERIFY
+    ├─ agent-browser snapshot
+    └─ agentui → VERIFY_UI (agentation loop)   ← 이 단계
+[4] CLEANUP
+```
+
+> 자세한 jeo 통합 내용: [jeo SKILL.md](../jeo/SKILL.md) Section 3.3.1 상세 워크플로우 확인
+
+
 ## References
 
 - [agentation repo](https://github.com/benjitaylor/agentation)

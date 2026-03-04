@@ -29,7 +29,15 @@
 │          │          Solutioning→Implementation│                 │
 │          └───────────────┬──────────────────┘                  │
 │                          │                                      │
-│          ┌───────────────▼──────────────────┐                  │
+│          │         PHASE 3: VERIFY           │                  │
+│          │   agent-browser snapshot <url>    │                  │
+│          │   UI/기능 동작 확인               │                  │
+│          │                                   │                  │
+│          │   [agentui keyword?]              │                  │
+│          │   └─ YES: VERIFY_UI (agentation)  │                  │
+│          │       watch_annotations loop      │                  │
+│          │       ack → fix → resolve         │                  │
+│          └───────────────┬──────────────────┘                  │
 │          │         PHASE 3: VERIFY           │                  │
 │          │   agent-browser snapshot <url>    │                  │
 │          │   UI/기능 동작 확인               │                  │
@@ -44,6 +52,60 @@
 │                       [DONE]                                    │
 └─────────────────────────────────────────────────────────────────┘
 ```
+
+---
+
+## agentui — agentation Watch Loop (VERIFY_UI Sub-Phase)
+
+```
+agentui keyword detected (or user requests UI annotation review)
+    │
+    ▼
+[PRE-CHECK]  npx agentation-mcp server running? → http://localhost:4747/pending
+             <Agentation endpoint="http://localhost:4747" /> mounted in app?
+    │
+    ▼
+[WATCH]  agentation_watch_annotations({batchWindowSeconds:10, timeoutSeconds:120})
+         blocking — waits for annotations or timeout
+    │
+    ├─ Annotations received:
+    │   │
+    │   ▼
+    │  [ACK]   agentation_acknowledge_annotation({id})
+    │          → status: 'acknowledged' → spinner shown in toolbar
+    │   │
+    │   ▼
+    │  [FIND]  grep/AST search using annotation.elementPath (CSS selector)
+    │          annotation.comment → understand desired change
+    │   │
+    │   ▼
+    │  [FIX]   apply code change to matched component/file
+    │   │
+    │   ▼
+    │  [RESOLVE] agentation_resolve_annotation({id, summary})
+    │            → status: 'resolved' → green checkmark in toolbar
+    │   │
+    │   └─ Next annotation → repeat ACK→FIND→FIX→RESOLVE
+    │
+    ├─ count=0 (all resolved)
+    │   └─ VERIFY_UI complete → proceed to CLEANUP
+    │
+    └─ timeout (120s)
+        └─ summarize what was/wasn't addressed → proceed to CLEANUP
+```
+
+**HTTP REST API (Codex / Gemini / OpenCode fallback — no MCP):**
+```
+LOOP:
+  GET  http://localhost:4747/pending         → {count, annotations[]}
+  if count == 0 → break (done)
+  for each annotation:
+    PATCH .../annotations/:id {status:"acknowledged"}
+    [search & fix code via elementPath]
+    PATCH .../annotations/:id {status:"resolved", resolution:"<summary>"}
+  sleep 5 → repeat
+```
+
 
 ---
 
@@ -113,14 +175,17 @@ gemini --approval-mode plan
 ## State Machine
 
 ```
-States: plan → execute → verify → cleanup → done
+States: plan → execute → verify → verify_ui? → cleanup → done
 
 Transitions:
   plan     → execute  (plan approved)
   plan     → plan     (feedback received, re-plan)
   execute  → verify   (tasks complete, browser UI present)
-  execute  → cleanup  (task complete, no browser UI)
-  verify   → cleanup  (verification passed)
+  verify   → verify_ui (agentui keyword detected, agentation running)
+  verify   → cleanup  (no agentui, verification passed)
+  verify_ui → cleanup (annotations all resolved or timeout)
+
+  cleanup  → done     (worktrees removed, prune complete)
   cleanup  → done     (worktrees removed, prune complete)
 ```
 
@@ -197,6 +262,8 @@ git worktree prune
 | `PLANNOTATOR_PORT` | Fixed plannotator port | auto |
 | `JEO_MAX_ITERATIONS` | Max ralph loop iterations | `20` |
 
+| `AGENTATION_PORT` | agentation MCP server port | `4747` |
+| `AGENTATION_TIMEOUT` | agentui watch loop timeout (seconds) | `120` |
 ---
 
 ## Troubleshooting
@@ -236,4 +303,17 @@ git worktree prune --verbose
 # Manual directory removal
 rm -rf /path/to/worktree
 git worktree prune
+```
+
+### agentui (agentation) watch loop not triggering
+```bash
+# Verify agentation-mcp server is running
+curl -sf http://localhost:4747/pending
+# Should return: {"count": N, "annotations": [...]}
+
+# Check MCP registration (Claude Code)
+cat ~/.claude/settings.json | python3 -c "import sys,json; s=json.load(sys.stdin); print(s.get('mcpServers', {}))"
+
+# Restart agentation-mcp server
+npx agentation-mcp server
 ```

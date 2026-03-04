@@ -2496,7 +2496,7 @@
     },
     {
       "name": "jeo",
-      "description": "JEO \u2014 Integrated AI agent orchestration. ralph+plannotator for visual plan review, team/bmad for parallel execution, agent-browser for vibe-kanban tracking, auto worktree cleanup. Installs: omc, omx, ohmg, bmad, ralph, plannotator, agent-browser, playwriter, vibe-kanban. Keyword: jeo.",
+      "description": "JEO — Integrated AI agent orchestration. ralph+plannotator for visual plan review, team/bmad for parallel execution, agent-browser for browser verification, agentation (agentui keyword) for UI annotation watch-loop, auto worktree cleanup. Installs: omc, omx, ohmg, bmad, ralph, plannotator, agent-browser, agentation. Keywords: jeo, agentui.",
       "category": "utilities",
       "path": "jeo/SKILL.md",
       "tags": [
@@ -2507,6 +2507,9 @@
         "team",
         "bmad",
         "vibe-kanban",
+        "agentation",
+        "agentui",
+        "ui-feedback",
         "agent-browser",
         "omc",
         "omx",

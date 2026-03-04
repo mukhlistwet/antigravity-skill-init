@@ -98,7 +98,20 @@ if not planno_exists:
         json.dump(settings, f, indent=2)
     print("✓ plannotator AfterAgent hook added to ~/.gemini/settings.json")
 else:
-    print("✓ plannotator hook already present")
+    print("\u2713 plannotator hook already present")
+
+# Add agentation MCP server if missing
+mcp_servers = settings.setdefault("mcpServers", {})
+if "agentation" not in mcp_servers:
+    mcp_servers["agentation"] = {
+        "command": "npx",
+        "args": ["-y", "agentation-mcp", "server"]
+    }
+    with open(settings_path, "w") as f:
+        json.dump(settings, f, indent=2)
+    print("\u2713 agentation MCP server added to ~/.gemini/settings.json")
+else:
+    print("\u2713 agentation MCP already present")
 PYEOF
     ok "Gemini CLI settings updated"
   fi
@@ -137,6 +150,13 @@ NEVER skip plannotator. NEVER proceed to EXECUTE without approved=true.
 
 **CLEANUP** (worktree):
 - After all work: `bash .agent-skills/jeo/scripts/worktree-cleanup.sh`
+
+**AGENTUI** (agentation watch loop — HTTP API 폴백):
+When user says "agentui" or asks to process UI annotations:
+1. GET http://localhost:4747/pending — check count
+2. For each annotation: PATCH status:acknowledged, fix code via elementPath, PATCH status:resolved + resolution
+3. Repeat until count=0. Emit AGENTUI_READY when done.
+NEVER proceed without resolving all annotations.
 
 ### ohmg Integration
 For Gemini multi-agent orchestration:

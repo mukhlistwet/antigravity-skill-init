@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # JEO Skill — Claude Code Plugin & Hook Setup
-# Configures: omc plugin, plannotator hook, jeo workflow in ~/.claude/settings.json
+# Configures: omc plugin, plannotator hook, agentation MCP, jeo workflow in ~/.claude/settings.json
 # Usage: bash setup-claude.sh [--dry-run]
 
 set -euo pipefail
@@ -107,6 +107,58 @@ if not settings.get("env", {}).get("CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS"):
 else:
     print("✓ Experimental agent teams already enabled")
 PYEOF
+    ok "Claude Code settings updated (plannotator hook + experimental teams)"
+
+    # ── 2b. agentation MCP + UserPromptSubmit hook ─────────────────────────────
+    python3 - <<'PYEOF2'
+import json, os
+
+settings_path = os.path.expanduser('~/.claude/settings.json')
+try:
+    with open(settings_path) as f:
+        settings = json.load(f)
+except (FileNotFoundError, json.JSONDecodeError):
+    settings = {}
+
+changed = False
+
+# Add agentation to mcpServers
+mcp_servers = settings.setdefault('mcpServers', {})
+if 'agentation' not in mcp_servers:
+    mcp_servers['agentation'] = {
+        'command': 'npx',
+        'args': ['-y', 'agentation-mcp', 'server']
+    }
+    changed = True
+    print('\u2713 agentation MCP server registered')
+else:
+    print('\u2713 agentation MCP already registered')
+
+# Add UserPromptSubmit hook to inject pending annotations
+hooks = settings.setdefault('hooks', {})
+user_prompt = hooks.setdefault('UserPromptSubmit', [])
+agentation_cmd = (
+    "curl -sf --connect-timeout 1 http://localhost:4747/pending 2>/dev/null | "
+    "python3 -c \"import sys,json;d=json.load(sys.stdin);"
+    "c=d['count'];exit(0)if c==0 else"
+    " print(f'=== AGENTATION: {c} UI annotations pending ===')\""
+    " 2>/dev/null;exit 0"
+)
+hook_exists = any(
+    h.get('command', '').startswith('curl -sf --connect-timeout 1 http://localhost:4747')
+    for h in user_prompt
+)
+if not hook_exists:
+    user_prompt.append({'type': 'command', 'command': agentation_cmd})
+    changed = True
+    print('\u2713 agentation UserPromptSubmit hook added')
+else:
+    print('\u2713 agentation UserPromptSubmit hook already present')
+
+if changed:
+    with open(settings_path, 'w') as f:
+        json.dump(settings, f, indent=2)
+PYEOF2
     ok "Claude Code settings updated"
   fi
 fi

@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # JEO Skill — OpenCode Plugin Registration
-# Configures: opencode.json plugin entry + slash commands
+# Configures: opencode.json plugin entry + agentation MCP + slash commands
 # Usage: bash setup-opencode.sh [--dry-run]
 
 set -euo pipefail
@@ -66,7 +66,18 @@ if "@plannotator/opencode@latest" not in plugins:
 # Add omx if not present
 if "@oh-my-opencode/opencode@latest" not in plugins:
     plugins.append("@oh-my-opencode/opencode@latest")
-    print("✓ omx (oh-my-opencode) plugin added")
+    print("\u2713 omx (oh-my-opencode) plugin added")
+
+# Add agentation MCP if not present
+mcp_config = config.setdefault("mcp", {})
+if "agentation" not in mcp_config:
+    mcp_config["agentation"] = {
+        "type": "local",
+        "command": ["npx", "-y", "agentation-mcp", "server"]
+    }
+    print("\u2713 agentation MCP added to opencode.json")
+else:
+    print("\u2713 agentation MCP already present")
 
 # Add JEO slash commands
 instructions = config.setdefault("instructions", "")
@@ -75,9 +86,9 @@ jeo_instructions = """
 
 /jeo-plan    — Start ralph+plannotator planning workflow
 /jeo-exec    — Execute with team or BMAD orchestration
+/jeo-agentui — Start agentation watch loop (VERIFY_UI)
 /jeo-verify  — Verify UI with agent-browser snapshot
 /jeo-cleanup — Clean up worktrees after completion
-
 ## JEO Workflow
 1. PLAN: Use ralph for task planning + plannotator for visual review
 2. EXECUTE: Use omx team agents or BMAD structured phases
@@ -99,9 +110,30 @@ Then read /tmp/plannotator_feedback.txt:
 NEVER skip plannotator. NEVER proceed to EXECUTE without approved=true.
 """
 
+AGENTUI_INSTRUCTIONS = """
+
+## AGENTUI: agentation Watch Loop (/jeo-agentui)
+When user says 'agentui' or invokes /jeo-agentui:
+1. Ensure agentation-mcp server running: npx agentation-mcp server (HTTP :4747)
+2. Use agentation_watch_annotations MCP tool (batchWindowSeconds:10, timeoutSeconds:120) — blocking
+3. For each annotation:
+   a. agentation_acknowledge_annotation({id})
+   b. Search code via annotation.elementPath CSS selector
+   c. Apply fix based on annotation.comment
+   d. agentation_resolve_annotation({id, summary})
+4. HTTP fallback (no MCP):
+   GET  http://localhost:4747/pending
+   PATCH http://localhost:4747/annotations/:id  {status:'acknowledged'|'resolved', resolution:'<summary>'}
+5. Repeat until count=0 or 120s timeout.
+NEVER use & background. NEVER skip annotation without resolving or dismissing.
+"""
+"""
+
 if "JEO Orchestration Commands" not in instructions:
-    config["instructions"] = instructions + jeo_instructions
-    print("✓ JEO instructions added to opencode.json")
+    config["instructions"] = instructions + jeo_instructions + AGENTUI_INSTRUCTIONS
+    print("\u2713 JEO + agentui instructions added to opencode.json")
+
+
 
 with open(config_path, "w") as f:
     json.dump(config, f, indent=2)
@@ -114,8 +146,9 @@ fi
 echo ""
 echo "OpenCode slash commands after setup:"
 echo "  /jeo-plan      ← Start planning workflow"
-echo "  /jeo-exec      ← Execute task"
-echo "  /jeo-verify    ← Verify UI with agent-browser"
+echo "  /jeo-exec      \u2190 Execute task"
+echo "  /jeo-agentui   \u2190 agentation watch loop (VERIFY_UI)"
+echo "  /jeo-verify    \u2190 Verify UI with agent-browser"
 echo "  /jeo-cleanup   ← Clean worktrees"
 echo "  /plannotator-review ← Code review UI"
 echo ""

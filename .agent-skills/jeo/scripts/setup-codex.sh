@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # JEO Skill — Codex CLI Setup
-# Configures: developer_instructions in ~/.codex/config.toml + /prompts:jeo
+# Configures: developer_instructions + agentation MCP in ~/.codex/config.toml + /prompts:jeo
 # Usage: bash setup-codex.sh [--dry-run]
 
 set -euo pipefail
@@ -188,11 +188,12 @@ PROMPTEOF
 
   cat > "$HOOK_FILE" << 'HOOKEOF'
 #!/usr/bin/env python3
-"""JEO Codex notify hook — detects PLAN_READY signal and triggers plannotator."""
-import json, os, subprocess, sys
+"""JEO Codex notify hook — detects PLAN_READY / AGENTUI_READY and triggers plannotator / agentation."""
+import json, os, subprocess, sys, urllib.request, urllib.error, time
 
 # Signals that indicate the agent finished writing a plan
 PLAN_SIGNALS = ["PLAN_READY", "plan.md created", "계획 작성 완료", "plan complete"]
+AGENTUI_SIGNALS = ["AGENTUI_READY", "agentui ready", "annotation watch complete", "어노테이션 완료"]
 
 def main() -> int:
     try:
@@ -206,27 +207,42 @@ def main() -> int:
     msg = notification.get("last-assistant-message", "")
     cwd = notification.get("cwd", os.getcwd())
 
-    # Only trigger on plan completion signals
-    if not any(sig.lower() in msg.lower() for sig in PLAN_SIGNALS):
+    # PLAN_READY: trigger plannotator
+    if any(sig.lower() in msg.lower() for sig in PLAN_SIGNALS):
+        plan_path = os.path.join(cwd, "plan.md")
+        if not os.path.exists(plan_path):
+            return 0
+        plan_content = open(plan_path).read()
+        payload = json.dumps({"tool_input": {"plan": plan_content, "permission_mode": "acceptEdits"}})
+        feedback_file = "/tmp/plannotator_feedback.txt"
+        try:
+            with open(feedback_file, "w") as f:
+                subprocess.run(["plannotator"], input=payload, stdout=f, stderr=f, text=True)
+            print(f"[JEO] plannotator feedback \u2192 {feedback_file}")
+        except FileNotFoundError:
+            print("[JEO] plannotator not found \u2014 skipping")
         return 0
 
-    plan_path = os.path.join(cwd, "plan.md")
-    if not os.path.exists(plan_path):
+    # AGENTUI_READY: poll agentation HTTP API and print pending annotations
+    if any(sig.lower() in msg.lower() for sig in AGENTUI_SIGNALS):
+        base_url = "http://localhost:4747"
+        try:
+            with urllib.request.urlopen(f"{base_url}/pending", timeout=2) as r:
+                data = json.loads(r.read())
+            count = data.get("count", 0)
+            annotations = data.get("annotations", [])
+            if count == 0:
+                print("[JEO] agentation: no pending annotations")
+            else:
+                print(f"[JEO] agentation: {count} pending annotations")
+                for ann in annotations:
+                    print(f"  [{ann.get('id')}] {ann.get('element','?')} | {ann.get('comment','')[:80]}")
+                    print(f"    elementPath: {ann.get('elementPath','?')}")
+        except (urllib.error.URLError, Exception) as e:
+            print(f"[JEO] agentation server not reachable ({base_url}): {e}")
         return 0
-
-    plan_content = open(plan_path).read()
-    payload = json.dumps({"tool_input": {"plan": plan_content, "permission_mode": "acceptEdits"}})
-
-    feedback_file = "/tmp/plannotator_feedback.txt"
-    try:
-        with open(feedback_file, "w") as f:
-            subprocess.run(["plannotator"], input=payload, stdout=f, stderr=f, text=True)
-        print(f"[JEO] plannotator feedback → {feedback_file}")
-    except FileNotFoundError:
-        print("[JEO] plannotator not found — skipping")
 
     return 0
-
 if __name__ == "__main__":
     sys.exit(main())
 HOOKEOF
@@ -257,6 +273,14 @@ if not re.search(r'(?m)^notify\s*=', content):
 else:
     print("✓ notify already configured")
 
+# Add agentation [[mcp_servers]] if missing
+if 'agentation' not in content:
+    agentation_block = '\n[[mcp_servers]]\nname = "agentation"\ncommand = "npx"\nargs = ["-y", "agentation-mcp", "server"]\n'
+    content = content.rstrip() + agentation_block
+    print("\u2713 agentation MCP server added to config.toml")
+else:
+    print("\u2713 agentation MCP already in config.toml")
+
 # Add [tui] section if missing
 if "[tui]" not in content:
     content += '\n[tui]\nnotifications = ["agent-turn-complete"]\nnotification_method = "osc9"\n'
@@ -268,14 +292,14 @@ with open(config_path, "w") as f:
     f.write(content)
 PYEOF
 
-  ok "Codex config.toml updated with notify hook"
+  ok "Codex config.toml updated (notify hook + agentation MCP + tui)"
 fi
 
 echo ""
 echo "Codex CLI usage after setup:"
 echo "  /prompts:jeo             ← Activate JEO orchestration workflow"
 echo "  notify hook: ~/.codex/hooks/jeo-notify.py"
-echo "    fires on: PLAN_READY signal in agent output"
+echo "    fires on: PLAN_READY / AGENTUI_READY signals in agent output"
 echo "    writes to: /tmp/plannotator_feedback.txt"
 echo ""
 ok "Codex CLI setup complete"
