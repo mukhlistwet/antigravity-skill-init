@@ -4,7 +4,7 @@ keyword: compliance
 description: 내부 AI 툴 필수 구현 가이드(P0/P1) 기반으로 권한, 비용, 로그, 보안 컴플라이언스를 설계-검증-개선하는 자동화 스킬. RBAC 설계, Gateway 원칙, Firestore 정책, 행동 로그, 비용 투명성, 기준검증 시스템의 전체 라이프사이클을 지원한다.
 allowed-tools: [Read, Bash, Grep, Glob]
 compatibility: "Requires python3 (stdlib only), jq, bash, bc, curl, git. PyYAML required only for install.sh (pip install pyyaml). Optional: Notion MCP tool for Notion workspace integration."
-tags: [compliance, RBAC, security, cost-tracking, audit-log, gateway, firestore, deploy-gate, P0]
+tags: [compliance, RBAC, security, cost-tracking, audit-log, gateway, firestore, deploy-gate, P0, quick, full, improve, slash-command]
 platforms: [Claude, Gemini, Codex, OpenCode]
 version: 1.0.0
 source: user-installed skill
@@ -38,11 +38,19 @@ npx skills add https://github.com/supercent-io/skills-template --skill ai-tool-c
 | Action | Command | Description |
 |--------|---------|-------------|
 | 프로젝트 초기화 | `/compliance-init` | RBAC 매트릭스, Gateway boilerplate, 로그 스키마, 비용 추적 인터페이스 생성 |
-| 빠른 스캔 | `/compliance-scan` | P0 핵심 항목 빠른 점검 (코드 패턴 기반) |
-| 전수 검증 | `/compliance-verify` | 11개 P0 룰 전수 검증 + 준수 점수 산출 |
+| 빠른 스캔 | `/compliance-scan`, `/compliance-quick`, `/quick` | P0 핵심 항목 빠른 점검 (코드 패턴 기반) |
+| 전수 검증 | `/compliance-verify`, `/compliance-full`, `/full` | 11개 P0 룰 전수 검증 + 준수 점수 산출 |
 | 점수 확인 | `/compliance-score` | 현재 준수 점수(보안/권한/비용/로그) 표시 |
 | 배포 게이트 | `/compliance-gate` | Green/Yellow/Red 판정 + 배포 승인/차단 결정 |
-| 개선 가이드 | `/compliance-improve` | 위반 항목별 구체적 수정 제안 + 재검증 루프 |
+| 개선 가이드 | `/compliance-improve`, `/improve` | 위반 항목별 구체적 수정 제안 + 재검증 루프 |
+
+### Slash Mode Router
+
+모드 슬래시 명령어는 아래와 같이 매핑된다.
+
+- `/quick`, `/compliance-quick` -> Quick Scan (`/compliance-scan`)
+- `/full`, `/compliance-full` -> Full Verify (`/compliance-verify`)
+- `/improve` -> Improve (`/compliance-improve`)
 
 ---
 
@@ -52,7 +60,7 @@ npx skills add https://github.com/supercent-io/skills-template --skill ai-tool-c
 
 코드베이스를 정적 분석하여 P0 위반 가능성을 빠르게 식별한다.
 
-**실행 방법**: `/compliance-scan` 또는 트리거 키워드 `컴플라이언스 스캔`, `quick scan`
+**실행 방법**: `/compliance-scan`, `/compliance-quick`, `/quick` 또는 트리거 키워드 `컴플라이언스 스캔`, `quick scan`
 
 **수행 내용**:
 - Grep/Glob 기반 코드 패턴 검색
@@ -69,7 +77,7 @@ npx skills add https://github.com/supercent-io/skills-template --skill ai-tool-c
 
 11개 P0 룰을 전수 검증하고 정량적 준수 점수를 산출한다.
 
-**실행 방법**: `/compliance-verify` 또는 트리거 키워드 `P0 검증`, `full verify`, `배포 검증`
+**실행 방법**: `/compliance-verify`, `/compliance-full`, `/full` 또는 트리거 키워드 `P0 검증`, `full verify`, `배포 검증`
 
 **수행 내용**:
 - 11개 P0 룰 각각에 대해 Evidence 수집 + pass/fail 판정
@@ -109,7 +117,7 @@ npx skills add https://github.com/supercent-io/skills-template --skill ai-tool-c
 
 위반 항목에 대한 구체적 수정 가이드를 제공하고 재검증 루프를 실행한다.
 
-**실행 방법**: `/compliance-improve` 또는 트리거 키워드 `컴플라이언스 개선`, `위반 수정`
+**실행 방법**: `/compliance-improve`, `/improve` 또는 트리거 키워드 `컴플라이언스 개선`, `위반 수정`
 
 **수행 내용**:
 - 각 FAIL 항목에 대한 코드 레벨 수정 제안 (파일 경로 + 변경 전/후 코드)
