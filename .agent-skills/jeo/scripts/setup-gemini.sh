@@ -53,12 +53,13 @@ if ! $MD_ONLY; then
 # Phase guard: only fire during PLAN phase to prevent conflict with agentation
 
 JEO_STATE="${PWD}/.omc/state/jeo-state.json"
-if [[ -f "$JEO_STATE" ]]; then
-  PHASE=$(python3 -c "import json; print(json.load(open('$JEO_STATE')).get('phase',''))" 2>/dev/null || echo "")
-  # Only run plannotator during plan phase (or if no state file exists yet)
-  if [[ -n "$PHASE" && "$PHASE" != "plan" ]]; then
-    exit 0
-  fi
+if [[ ! -f "$JEO_STATE" ]]; then
+  exit 0  # JEO is not active — no state file
+fi
+PHASE=$(python3 -c "import json; print(json.load(open('$JEO_STATE')).get('phase',''))" 2>/dev/null || echo "")
+# Only run plannotator during plan phase
+if [[ -n "$PHASE" && "$PHASE" != "plan" ]]; then
+  exit 0
 fi
 
 PLAN_FILE="$(pwd)/plan.md"

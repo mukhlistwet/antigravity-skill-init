@@ -19,6 +19,114 @@ compatibility: "Requires git, node>=18, bash. Optional: bun, docker."
 
 ---
 
+## 0. 에이전트 실행 프로토콜 (jeo 키워드 감지 시 즉시 따를 것)
+
+> 아래는 설명이 아닌 명령이다. 순서대로 정확히 실행한다. 각 단계는 완료 후에만 다음으로 진입한다.
+
+### STEP 0: 상태 파일 부트스트랩 (필수 — 항상 첫 번째)
+
+```bash
+mkdir -p .omc/state .omc/plans .omc/logs
+```
+
+`.omc/state/jeo-state.json` 이 없으면 생성:
+
+```json
+{
+  "phase": "plan",
+  "task": "<감지된 task>",
+  "plan_approved": false,
+  "team_available": null,
+  "worktrees": [],
+  "created_at": "<ISO 8601>",
+  "updated_at": "<ISO 8601>",
+  "agentation": {
+    "active": false,
+    "session_id": null,
+    "keyword_used": null,
+    "started_at": null,
+    "timeout_seconds": 120,
+    "annotations": { "total": 0, "acknowledged": 0, "resolved": 0, "dismissed": 0, "pending": 0 },
+    "completed_at": null,
+    "exit_reason": null
+  }
+}
+```
+
+사용자에게 고지:
+> "JEO 활성화됨. Phase: PLAN. UI 피드백 루프 필요 시 `annotate` 키워드를 추가하세요."
+
+---
+
+### STEP 1: PLAN (건너뛰기 절대 금지)
+
+1. `plan.md` 작성 (목표, 단계, 리스크, 완료 기준 포함)
+2. **plannotator 호출** (플랫폼별):
+   - **Claude Code**: `submit_plan` MCP 도구 직접 호출
+   - **Codex / Gemini / OpenCode**: blocking CLI 실행 (`&` 절대 금지):
+     ```bash
+     python3 -c "import json,sys; plan=open('plan.md').read(); sys.stdout.write(json.dumps({'tool_input':{'plan':plan,'permission_mode':'acceptEdits'}}))" | plannotator > /tmp/plannotator_feedback.txt 2>&1
+     ```
+3. 결과 확인:
+   - `approved: true` → `jeo-state.json`의 `phase`를 `"execute"`, `plan_approved`를 `true`로 업데이트 → **STEP 2 진입**
+   - 미승인 → `/tmp/plannotator_feedback.txt` 읽고 피드백 반영 → `plan.md` 수정 → 2번 반복
+
+**NEVER: `approved: true` 없이 EXECUTE 진입. NEVER: `&` 백그라운드 실행.**
+
+---
+
+### STEP 2: EXECUTE
+
+1. `jeo-state.json`의 `phase`를 `"execute"`로 업데이트
+2. **team 사용 가능 (Claude Code + omc)**:
+   ```
+   /omc:team 3:executor "<task>"
+   ```
+3. **team 없음 (BMAD fallback)**:
+   ```
+   /workflow-init   # BMAD 초기화
+   /workflow-status # 단계 확인
+   ```
+
+---
+
+### STEP 3: VERIFY
+
+1. `jeo-state.json`의 `phase`를 `"verify"`로 업데이트
+2. **agent-browser로 기본 검증** (브라우저 UI 있을 때):
+   ```bash
+   agent-browser snapshot http://localhost:3000
+   ```
+3. `annotate` 키워드 감지 → **STEP 3.1로 진입**
+4. 없으면 → **STEP 4로 진입**
+
+---
+
+### STEP 3.1: VERIFY_UI (annotate 키워드 감지 시만)
+
+1. Pre-flight 확인 (진입 전 필수):
+   ```bash
+   curl -sf --connect-timeout 2 http://localhost:4747/health || { echo '❌ agentation-mcp 미실행'; exit 1; }
+   ```
+2. `jeo-state.json` 업데이트: `phase = "verify_ui"`, `agentation.active = true`
+3. **Claude Code (MCP)**: `agentation_watch_annotations` 블로킹 호출 (`batchWindowSeconds:10`, `timeoutSeconds:120`)
+4. **Codex / Gemini / OpenCode (HTTP)**: `GET http://localhost:4747/pending` 폴링 루프
+5. 각 annotation 처리: `acknowledge` → `elementPath`로 코드 탐색 → 수정 → `resolve`
+6. `count=0` 또는 timeout → **STEP 4로 진입**
+
+---
+
+### STEP 4: CLEANUP
+
+1. `jeo-state.json`의 `phase`를 `"cleanup"`으로 업데이트
+2. worktree 정리:
+   ```bash
+   bash scripts/worktree-cleanup.sh || git worktree prune
+   ```
+3. `jeo-state.json`의 `phase`를 `"done"`으로 업데이트
+
+---
+
 ## 1. Quick Start
 
 ```bash

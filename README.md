@@ -1,6 +1,6 @@
 # Agent Skills
 
-> v2026-03-04 · **70 Skills** · **TOON Format** · **Flat Skill Layout**
+> v2026-03-05 · **70 Skills** · **TOON Format** · **Flat Skill Layout**
 
 [![GitHub Releases](https://img.shields.io/badge/GitHub-Releases-blue)](https://github.com/supercent-io/skills-template/releases)
 [![Skills](https://img.shields.io/badge/Skills-70-brightgreen)](#skills-list-70-total)
@@ -37,10 +37,13 @@ curl -s https://raw.githubusercontent.com/supercent-io/skills-template/main/setu
 
 ---
 
-## What's New in v2026-03-04
+## What's New in v2026-03-05
 
 | 변경 | 내용 |
 |------|------|
+| **`agentation` v1.1.0 설치 개선** | 공식 `agentation.dev/install` 페이지 기반 SKILL.md 전면 개선. (1) **Claude Code Official Skill** `npx skills add benjitaylor/agentation` → `/agentation` 커맨드 유도 추가 (2) **`npx add-mcp`** 9+ 에이전트 자동 감지 보편 MCP 설치 방법으로 추진 (3) **Local-first 아키텍첸** 문서화 (오프라인 동작·세션 연속성·중복 없음) (4) Section 2를 3가지 경로(스킬/Universal/수동)로 개편, Section 4에 `npx add-mcp` 우선 노출 |
+| **`jeo` Bug 수정 + 에이전트 실행 프로토콜** | **[P0]** `setup-gemini.sh` — `jeo-plannotator.sh`에 state file guard 추가: JEO가 비활성 상태(`jeo-state.json` 없음)일 때 AfterAgent 훅이 잘못 plannotator를 실행하던 버그 수정. **[P1]** `jeo/SKILL.md` — `## 0. 에이전트 실행 프로토콜` 섹션 추가: ralph처럼 명령형 pseudocode 단계(STEP 0~4)로 에이전트가 jeo 키워드 감지 즉시 따를 수 있는 실행 프로토콜. **[P1]** `skills-lock.json` — `dependencies` 키 신규 추가 (plannotator + agentation, required_by: jeo) |
+| **`jeo` 상태 파일 생명주기 명세** | `jeo-state.json` 생성 → phase 전환(`plan→execute→verify→verify_ui→cleanup→done`) → agentation 필드(`active`, `exit_reason`, `annotations` 집계) 전체 생명주기를 SKILL.md에 명시. 이전에는 에이전트가 state file을 생성하는 명시적 지시 없이 실행해 훅 phase guard가 제대로 동작하지 않던 구조적 원인 해소 |
 | **`ralph` v3.0.0 — Ouroboros 통합** | [Q00/ouroboros](https://github.com/Q00/ouroboros) 기반으로 전면 재작성. Specification-first 워크플로우(Interview→Seed→Execute→Evaluate→Evolve) 통합, 9개 에이전트, Ambiguity ≤ 0.2 게이트, Ontology Similarity ≥ 0.95 수렴 조건, 3플랫폼 병렬 지원 (Claude · Codex · Gemini) |
 | **신규 `ai-tool-compliance` 스킬** | 내부 AI 툴 필수 구현 가이드(P0/P1) 기반 컴플라이언스 자동 검증. 4도메인 이진 점수(40/25/20/15), 배포 게이트, 이력 추적 |
 | **`ai-tool-compliance` P1 확장** | 기본 P0 검증 경로는 유지하고(`verify.sh` 기본 동작 변경 없음), 선택적 P1 확장 모드(`--include-p1`)와 P1 성숙도 점수(`p1_maturity_score`)를 추가. 리포트/문서는 append-only로 확장 |
@@ -283,7 +286,7 @@ npx skills add https://github.com/supercent-io/skills-template --skill playwrite
 | Skill | Description | Platforms |
 |-------|-------------|-----------|
 | `agent-browser` | Fast headless browser CLI for AI agents | All platforms |
-| `agentation` | Visual UI annotation tool — humans click elements, agents receive CSS selectors + MCP watch-loop + Claude Code hooks | Claude · Gemini · Codex · Cursor · Windsurf · OpenCode |
+| `agentation` | Visual UI annotation tool — `npx skills add benjitaylor/agentation` → `/agentation` (Claude Code Official Skill) · `npx add-mcp` (9+ 에이전트 자동 감지) · Local-first 디자인(오프라인 동작·세션 연속성) | Claude · Gemini · Codex · Cursor · Windsurf · OpenCode |
 | `bmad-gds` | BMAD Game Development Studio — Pre-production through production with 6 specialized agents (Unity · Unreal · Godot) | Claude · Gemini · Codex · OpenCode |
 | `bmad-idea` | BMAD Creative Intelligence Suite — brainstorming, design thinking, innovation strategy, problem-solving, storytelling | Claude · Gemini · Codex · OpenCode |
 | `copilot-coding-agent` | GitHub Copilot Coding Agent — Issue → Draft PR automation | Claude · Codex |
@@ -529,7 +532,13 @@ bash scripts/install.sh --all   # 전체 설치
 
 ## Changelog
 
-**v2026-03-04 (latest)**:
+**v2026-03-05 (latest)**:
+- **jeo: state file guard 버그 수정 (P0)**: `setup-gemini.sh`의 `jeo-plannotator.sh` 생성 블록에서 state file(`jeo-state.json`) 부재 시 즉시 `exit 0` 처리 추가. 이전에는 JEO가 비활성 상태여도 AfterAgent 훅이 `plan.md` 존재만으로 plannotator를 잘못 실행하던 버그 수정
+- **jeo: 에이전트 실행 프로토콜 추가 (P1)**: `SKILL.md`에 `## 0. 에이전트 실행 프로토콜` 섹션 삽입. jeo 키워드 감지 즉시 따를 수 있는 명령형 pseudocode 5단계(STEP 0: state 부트스트랩 → STEP 1: PLAN/plannotator → STEP 2: EXECUTE → STEP 3: VERIFY → STEP 3.1: VERIFY_UI/agentation → STEP 4: CLEANUP). ralph 스킬 패턴과 동일한 형식
+- **skills-lock.json: 의존성 명세 추가 (P1)**: `"dependencies"` 키 신규 추가 — `plannotator`(required_by: jeo, installCommand: `--with-plannotator`)와 `agentation`(required_by: jeo, installCommand: `--with-agentation`) 등록
+- **agentation v1.1.0 설치 개선**: `agentation.dev/install` 공식 페이지 기반 SKILL.md 전면 개선. Claude Code Official Skill(`npx skills add benjitaylor/agentation` → `/agentation`), Universal `npx add-mcp` 우선 노출, Local-first 아키텍첸 문서화(오프라인 동작·세션 연속성·중복 없음), 오타 수정(`jeo 실치` → `설치`), 비전 v1.1.0 뱤프
+
+**v2026-03-04**:
 - **jeo annotate 통합 (v2)**: agentation VERIFY_UI 키워드를 `agentui` → `annotate`로 변경 (Korean alias: `UI검토`, `agentui` 하위 호환). Phase guard 추가로 plannotator-agentation 훅 충돌 해결 (Gemini AfterAgent, Codex notify). Pre-flight 3단계 체크, RE-SNAPSHOT 검증, jeo-state.json agentation 추적 필드, verify-loop.sh 통합 테스트, OpenCode setup Python 구문 버그 수정
 - **ralph v3.0.0**: [Q00/ouroboros](https://github.com/Q00/ouroboros) 기반으로 전면 재작성. Specification-first 워크플로우(단계: Interview→Seed→Execute→Evaluate→Evolve) 통합, 9개 에이전트, Ambiguity ≤ 0.2 게이트, Ontology Similarity ≥ 0.95 수렴 조건, 3플랫폼 병렬 지원 (Claude · Codex · Gemini)
 - **setup-all-skills-prompt 클린 재설치**: 설치 전 기존 `~/.agent-skills` 디렉터리를 자동 제거(`rm -rf`) 후 새로 생성. 플랫폼별 동기화 경로(`~/.claude/skills`, `~/.codex/skills`, `~/.gemini/skills`, `~/.opencode/skills` 등)도 for 루프로 순차 제거 후 재생성. 재설치 시 파일 충돌·잔재 없이 클린 설치 보장

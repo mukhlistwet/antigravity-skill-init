@@ -24,5 +24,21 @@
       "tags": ["LLM", "monitoring", "dashboard", "tokuin", "pm-insights", "ranking", "cost-tracking"],
       "addedAt": "2026-03-03T00:00:00Z"
     }
+  },
+  "dependencies": {
+    "plannotator": {
+      "version": "latest",
+      "source": "backnotprop/plannotator",
+      "installCommand": "bash scripts/install.sh --with-plannotator",
+      "required_by": ["jeo"],
+      "description": "시각적 계획/diff 리부 UI. jeo PLAN 단계 blocking 실행에 필수."
+    },
+    "agentation": {
+      "version": "latest",
+      "source": "benjitaylor/agentation",
+      "installCommand": "bash scripts/install.sh --with-agentation",
+      "required_by": ["jeo"],
+      "description": "UI 어노테이션 → 에이전트 코드 수정 연동. jeo `annotate` 키워드 VERIFY_UI 단계에서 사용."
+    }
   }
 }

@@ -51,19 +51,46 @@ agentation (monorepo)
 
 ## 2. Installation
 
-```bash
-# React toolbar (dev dependency)
-npm install agentation -D
-# or
-pnpm add agentation -D
+### 2.1 React Component (toolbar)
 
-# MCP server (for agent integration)
-npm install agentation-mcp -D
-# or
-pnpm add agentation-mcp -D
+```bash
+npm install agentation -D
+# or: pnpm add agentation -D  /  yarn add agentation -D  /  bun add agentation -D
 ```
 
-**Requirements**: React 18+, Node.js 18+, desktop browser (no mobile support)
+**Requirements**: React 18+, desktop browser, zero runtime deps beyond React (desktop only — no mobile)
+
+> 🔗 **Local-first by design**: 어노테이션은 로컈에 저장되며 MCP 서버에 연결될 때 자동 동기화됩니다.
+> - **오프라인 동작** — 서버 없이도 어노테이션 생성 가능
+> - **세션 연속성** — 페이지 새로고침 후에도 동일 세션 유지, 중복 없음
+> - **에이전트 우선** — resolve/dismiss는 에이전트 쭄인지로 슈주됨
+
+### 2.2 MCP Server — Universal Setup (권장)
+
+> **가장 빠른 방법** — 설치된 모든 에이전트를 자동 감지하여 설정 (Claude Code, Cursor, Codex, Windsurf 등 9+ 에이전트):
+
+```bash
+npx add-mcp "npx -y agentation-mcp server"
+```
+
+또는 수동 설치:
+
+```bash
+npm install agentation-mcp -D
+npx agentation-mcp server          # HTTP :4747 + MCP stdio
+npx agentation-mcp server --port 8080   # custom port
+npx agentation-mcp doctor          # verify setup
+```
+
+### 2.3 Claude Code — Official Skill (최소 설정)
+
+> Claude Code 사용자에게 권장하는 방식 — 프레임워크 자동 감지, 패키지 설치, 레이아웃 연동을 자동으로 처리합니다:
+
+```bash
+npx skills add benjitaylor/agentation
+# then in Claude Code:
+/agentation
+```
 
 ---
 
@@ -142,16 +169,41 @@ export default function App({ Component, pageProps }) {
 
 ## 4. MCP Server Setup — All Platforms
 
-> **Start the server first** before configuring any agent:
-> ```bash
-> npx agentation-mcp server          # HTTP :4747 + MCP stdio
-> npx agentation-mcp server --port 8080   # custom port
-> npx agentation-mcp doctor          # verify setup
-> ```
+**가장 빠른 방법 — Universal (9+ 에이전트 자동 감지):**
+```bash
+npx add-mcp "npx -y agentation-mcp server"
+```
+
+> [add-mcp](https://github.com/neondatabase/add-mcp)는 Claude Code, Cursor, Codex, Windsurf 등을 자동 감지하여 올바른 config에 바로 작성합니다.
+
+**서버 시작 / 검증:**
+
+```bash
+npx agentation-mcp server          # HTTP :4747 + MCP stdio
+npx agentation-mcp server --port 8080   # custom port
+npx agentation-mcp doctor          # verify setup
+```
 
 ---
 
 ### Claude Code (`.claude/`)
+
+**최소 설정 — Official Claude Code Skill (권장):**
+```bash
+npx skills add benjitaylor/agentation
+# Claude Code에서:
+/agentation
+```
+
+**Universal MCP 자동 설정 (Claude Code 포함 9+ 에이전트):**
+```bash
+npx add-mcp "npx -y agentation-mcp server"
+```
+
+**Interactive wizard (Claude Code 전용):**
+```bash
+npx agentation-mcp init
+```
 
 **Option A — CLI (recommended):**
 ```bash
@@ -634,7 +686,7 @@ EXECUTE 진입                  다음 단계 또는 루프
 ### jeo에서 사용하기
 
 ```bash
-# 1. jeo 실치 시 agentation 자동 등록
+# 1. jeo 설치 시 agentation 자동 등록
 bash .agent-skills/jeo/scripts/install.sh --with-agentation
 # 또는 전체 설치:
 bash .agent-skills/jeo/scripts/install.sh --all
@@ -716,8 +768,8 @@ jeo "<task>"
 
 ## Metadata
 
-- Version: 1.0.0
+- Version: 1.1.0
 - Source: benjitaylor/agentation (PolyForm Shield 1.0.0)
 - Packages: `agentation@2.2.1`, `agentation-mcp@1.2.0`
-- Last updated: 2026-03-04
+- Last updated: 2026-03-05
 - Scope: UI annotation bridge for human-agent feedback loops — Claude Code, Codex, Gemini CLI, OpenCode

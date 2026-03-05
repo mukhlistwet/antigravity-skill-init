@@ -68,8 +68,18 @@ Step 0 결과에 따라 실행하세요:
 
 **모든 플랫폼 (권장 시작점):**
 ```bash
+# jeo 핵심 스킬
 npx skills add https://github.com/supercent-io/skills-template --skill jeo
+
+# jeo 의존 스킬 (함께 설치 권장)
+npx skills add https://github.com/supercent-io/skills-template --skill plannotator --skill agentation
 ```
+
+> **jeo 에이전트 프로토콜**: jeo는 실행 시 `jeo-state.json`을 자동 생성하며 PLAN → EXECUTE → VERIFY → CLEANUP 단계를 순차 진행합니다.
+> PLAN 단계에서는 `plannotator`를, VERIFY_UI 단계(`annotate` 키워드)에서는 `agentation`을 사용하므로 두 스킬이 필요합니다.
+>
+> **agentation MCP 설치 (권장)**: `npx add-mcp "npx -y agentation-mcp server"` — Claude/Gemini/Codex/OpenCode 9개 이상 에이전트 자동 감지.
+> **agentation Claude Code Official Skill**: `npx skills add benjitaylor/agentation` 설치 후 `/agentation` 명령으로 브라우저 UI 자동 실행.
 
 **Claude Code 전용:**
 ```bash
@@ -154,6 +164,16 @@ npx skills add https://github.com/supercent-io/skills-template \
 jeo 스킬을 설정하고 사용해줘. 기억해.
 ```
 
+```bash
+# jeo ExitPlanMode 훅 설정 (plannotator 자동 연동)
+bash ~/.agent-skills/jeo/scripts/setup-claude.sh
+
+# agentation Claude Code Official Skill 설치 (권장)
+npx skills add benjitaylor/agentation
+# 설치 후 대화에서 실행:
+# /agentation  ← 브라우저 UI 자동 실행, annotate watch loop 시작
+```
+
 #### OpenCode — oh-my-opencode
 
 최신 설치 가이드를 fetch해서 구독 환경에 맞게 설치하세요:
@@ -170,11 +190,11 @@ curl -s https://raw.githubusercontent.com/code-yeongyu/oh-my-opencode/refs/heads
 npx skills add https://github.com/supercent-io/skills-template
 ```
 
-#### Gemini CLI — 확인
+#### Gemini CLI — jeo 훅 설정
 
 ```bash
-# Gemini CLI 훅 설정 확인
-ls ~/.gemini/ 2>/dev/null && echo "Gemini configured" || echo "Gemini not configured"
+# jeo AfterAgent 훅 자동 설정 (plannotator + agentation 연동)
+bash ~/.agent-skills/jeo/scripts/setup-gemini.sh
 ```
 
 > [Hooks 공식 가이드](https://developers.googleblog.com/tailor-gemini-cli-to-your-workflow-with-hooks/)
@@ -252,7 +272,7 @@ npx skills info jeo
 
 | 스킬 | 활성화 키워드 | 설명 |
 |------|-------------|------|
-| `jeo` | `jeo` | 통합 오케스트레이션 (권장 시작점) |
+| `jeo` | `jeo` | 통합 오케스트레이션 (권장 시작점) — 에이전트 실행 프로토콜 내장(STEP 0: state 부트스트랩 → PLAN/plannotator → EXECUTE → VERIFY → CLEANUP). 의존: plannotator, agentation |
 | `omc` | `omc`, `autopilot` | Claude Code 멀티에이전트 |
 | `ralph` | `ralph`, `ooo`, `ooo ralph`, `ooo interview` | Ouroboros 기반 specification-first 개발 (Interview→Seed→Execute→Evaluate→Evolve) + 영구 완료 루프 |
 | `plannotator` | `plan`, `계획` | 계획 검토 + Feedback loop |
@@ -263,7 +283,7 @@ npx skills info jeo
 | `ai-tool-compliance` | `ai-tool-compliance` | 내부 AI 툴 컴플라이언스 자동화(P0/P1) |
 | `agent-browser` | `agent-browser` | 헤드리스 브라우저 자동화 |
 | `llm-monitoring-dashboard` | `llm-monitoring-dashboard` | LLM 사용량 모니터링 대시보드 생성 |
-| `agentation` | `annotate`, `UI검토`, `agentui` | UI 어노테이션 → 에이전트 코드 수정 (annotate watch loop) |
+| `agentation` | `annotate`, `UI검토`, `agentui` | UI 어노테이션 → 에이전트 코드 수정. 설치: `npx add-mcp "npx -y agentation-mcp server"` (Universal) 또는 `npx skills add benjitaylor/agentation` → `/agentation` (Claude Code Official Skill). Local-first 아키텍처, 오프라인 동작, 세션 연속성 지원. |
 | `oh-my-codex` | `omx` | Codex CLI 멀티에이전트 |
 | `ohmg` | `ohmg` | Gemini / Antigravity 워크플로우 |
 
