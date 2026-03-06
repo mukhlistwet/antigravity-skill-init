@@ -94,7 +94,14 @@ for candidate in "${LOOP_SCRIPT_CANDIDATES[@]}"; do
 done
 
 if [[ -n "$LOOP_SCRIPT" ]]; then
-  bash "$LOOP_SCRIPT" "$PLAN_FILE" /tmp/plannotator_feedback.txt 3 || true
+  set +e
+  bash "$LOOP_SCRIPT" "$PLAN_FILE" /tmp/plannotator_feedback.txt 3
+  LOOP_RC=$?
+  set -e
+  if [[ "$LOOP_RC" -eq 32 ]]; then
+    echo "[JEO] plannotator unavailable: localhost bind blocked (sandbox/CI)." >&2
+    echo "[JEO] run PLAN gate in local TTY to use manual fallback approve/feedback." >&2
+  fi
 else
   PLANNOTATOR_RUNTIME_HOME="/tmp/jeo-$(python3 -c "import hashlib,os; print(f'/tmp/jeo-{hashlib.md5(os.getcwd().encode()).hexdigest()[:8]}')")/.plannotator"
   mkdir -p "$PLANNOTATOR_RUNTIME_HOME"
@@ -245,8 +252,10 @@ JEO provides integrated AI agent orchestration across all AI tools.
   # - approve/feedback 입력까지 반드시 대기
   # - 세션 종료 시 자동 재시작 (최대 3회)
   # - 3회 종료 시 PLAN 종료 여부를 사용자에게 확인
+  # - exit 32 시 localhost bind 차단(sandbox/CI): local TTY에서 수동 PLAN gate 실행
 3. /tmp/plannotator_feedback.txt 읽기
 4. "approved":true → EXECUTE 진입 / 미승인 → 피드백 반영 후 plan.md 수정 후 2번 반복
+5. PLAN gate exit 32면 인프라 차단이므로 local TTY에서 PLAN gate 재실행
 NEVER skip plannotator. NEVER proceed to EXECUTE without approved=true.
 
 **EXECUTE** (BMAD for Gemini):

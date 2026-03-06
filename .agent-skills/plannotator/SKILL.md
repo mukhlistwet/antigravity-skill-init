@@ -13,7 +13,7 @@ metadata:
 
 # plannotator — Interactive Plan & Diff Review
 
-> Keyword: `plan`, `계획` (alias: `planno`) | Source: https://github.com/backnotprop/plannotator
+> Keyword: `plan`, `계획` | Source: https://github.com/backnotprop/plannotator
 >
 > Annotate and review AI coding agent plans visually, share with your team, send feedback with one click.
 > Works with **Claude Code**, **OpenCode**, **Gemini CLI**, and **Codex CLI**.

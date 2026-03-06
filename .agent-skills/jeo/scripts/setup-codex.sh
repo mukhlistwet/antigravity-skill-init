@@ -60,7 +60,10 @@ else
 #   2. Run mandatory PLAN gate (blocks for feedback/approve, retries dead sessions up to 3):
 #      bash .agent-skills/jeo/scripts/plannotator-plan-loop.sh plan.md /tmp/plannotator_feedback.txt 3
 #   3. Output "PLAN_READY" to trigger notify hook as backup signal
-#   4. Check /tmp/plannotator_feedback.txt: approved=true -> EXECUTE, else re-plan
+#   4. Check result:
+#      - approved=true -> EXECUTE
+#      - approved=false -> re-plan
+#      - exit 32 -> localhost bind blocked (sandbox/CI). run PLAN gate in local TTY
 #
 # BMAD commands (fallback when team unavailable):
 #   /workflow-init   — initialize BMAD workflow
@@ -135,6 +138,7 @@ Before writing any code, create and review a plan:
 3. Read /tmp/plannotator_feedback.txt
 4. If \`"approved":true\` → proceed to EXECUTE
 5. If NOT approved → read annotations, revise plan.md, repeat from step 2
+6. If PLAN gate exits with 32 → localhost bind blocked. run PLAN gate in local TTY (manual fallback)
 NEVER skip plannotator. NEVER proceed to EXECUTE without approved=true.
 
 ### Step 2: EXECUTE (BMAD workflow for Codex)
@@ -162,6 +166,7 @@ After all tasks complete:
   - Wait for approve/feedback every time
   - If session dies, restart up to 3 times
   - After 3 dead sessions, stop and ask whether PLAN should be terminated
+  - If loop exits 32: localhost bind blocked. use local TTY/manual PLAN gate
   \`\`\`bash
   bash .agent-skills/jeo/scripts/plannotator-plan-loop.sh plan.md /tmp/plannotator_feedback.txt 3
   # Output PLAN_READY to trigger notify hook as backup signal
@@ -289,6 +294,9 @@ def main() -> int:
                 )
                 if result.stdout:
                     print(result.stdout.strip())
+                if result.returncode == 32:
+                    print("[JEO] plannotator unavailable: localhost bind blocked (sandbox/CI).")
+                    print("[JEO] run PLAN gate in local TTY to use manual fallback approve/feedback.")
                 print(f"[JEO] plannotator loop result code={result.returncode} feedback={feedback_file}")
             else:
                 plan_content = open(plan_path).read()

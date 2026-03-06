@@ -186,6 +186,11 @@ if [ "$PLAN_RC" -eq 0 ]; then
 elif [ "$PLAN_RC" -eq 10 ]; then
   echo "❌ 계획 미승인 — 피드백 반영 후 plan.md 수정하여 재시도하세요"
   exit 1
+elif [ "$PLAN_RC" -eq 32 ]; then
+  echo "⚠️ plannotator UI를 열 수 없는 환경입니다 (localhost bind 불가)."
+  echo "   - TTY 환경: 수동 PLAN gate(approve/feedback/stop)로 진행"
+  echo "   - 비TTY 환경: 사용자 확인 후 로컬(비샌드박스)에서 재시도"
+  exit 1
 elif [ "$PLAN_RC" -eq 30 ] || [ "$PLAN_RC" -eq 31 ]; then
   echo "⛔ PLAN 종료 결정(또는 확인 대기) 상태입니다. 사용자 확인 후 재시도하세요."
   exit 1
@@ -206,6 +211,7 @@ mkdir -p .omc/plans .omc/logs
 3. 결과 확인:
    - `approved: true` → `jeo-state.json`의 `phase`를 `"execute"`, `plan_approved`를 `true`로 업데이트 → **STEP 2 진입**
    - 미승인(`exit 10`) → `/tmp/plannotator_feedback.txt` 읽고 피드백 반영 → `plan.md` 수정 → 2번 반복
+   - 인프라 차단(`exit 32`) → localhost bind 불가 환경(예: sandbox/CI). TTY면 수동 gate, 비TTY면 사용자 확인 후 비샌드박스에서 재시도
    - 세션 3회 종료(`exit 30/31`) → PLAN 종료 여부를 사용자에게 확인하고 중단/재개 결정
 
 **NEVER: `approved: true` 없이 EXECUTE 진입. NEVER: `&` 백그라운드 실행.**
@@ -838,6 +844,7 @@ bash scripts/plannotator-plan-loop.sh plan.md /tmp/plannotator_feedback.txt 3
 # - approve/feedback 입력까지 반드시 대기
 # - 세션 종료 시 자동 재시작 (최대 3회)
 # - 3회 종료 시 PLAN 종료 여부 확인 후 중단/재개 결정
+# - localhost bind 불가 시 exit 32 (TTY에서는 수동 gate로 대체)
 
 # 결과 확인 후 분기
 # approved=true  → EXECUTE 진입
