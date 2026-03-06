@@ -31,6 +31,9 @@ fi
 # ── 2. Configure ~/.codex/config.toml ────────────────────────────────────────
 info "Configuring ~/.codex/config.toml..."
 
+HOOK_DIR="${HOME}/.codex/hooks"
+HOOK_FILE="${HOOK_DIR}/jeo-notify.py"
+
 if $DRY_RUN; then
   echo -e "${YELLOW}[DRY-RUN]${NC} Would create/update $CODEX_CONFIG"
   echo -e "${YELLOW}[DRY-RUN]${NC} Would create $JEO_PROMPT_FILE"
@@ -177,10 +180,13 @@ except Exception:
 Save progress to: \`.omc/state/jeo-state.json\`
 \`\`\`json
 {
-  "phase": "plan|execute|verify|cleanup",
+  "phase": "plan|execute|verify|verify_ui|cleanup|done",
   "task": "current task description",
   "plan_approved": false,
-  "worktrees": []
+  "team_available": false,
+  "retry_count": 0,
+  "last_error": null,
+  "checkpoint": null
 }
 \`\`\`
 
@@ -191,8 +197,6 @@ PROMPTEOF
 
   # ── 4. Create plannotator notify hook ────────────────────────────────────────
   info "Setting up plannotator notify hook..."
-  HOOK_DIR="${HOME}/.codex/hooks"
-  HOOK_FILE="${HOOK_DIR}/jeo-notify.py"
   mkdir -p "$HOOK_DIR"
 
   cat > "$HOOK_FILE" << 'HOOKEOF'
@@ -298,31 +302,52 @@ try:
 except Exception:
     content = ""
 
-if not re.search(r'(?m)^notify\s*=', content):
+notify_line = f'notify = ["python3", "{hook_path}"]\n'
+if re.search(r'(?m)^notify\s*=', content):
+    content = re.sub(r'(?m)^notify\s*=.*$', notify_line.rstrip(), content, count=1)
+    print("✓ notify hook synced in config.toml")
+else:
     first_table = re.search(r'^\[', content, re.MULTILINE)
-    notify_line = f'notify = ["python3", "{hook_path}"]\n'
     if first_table:
         content = content[:first_table.start()] + notify_line + "\n" + content[first_table.start():]
     else:
         content = notify_line + content
     print("✓ notify hook registered in config.toml")
-else:
-    print("✓ notify already configured")
 
 # Add agentation [[mcp_servers]] if missing
-if 'agentation' not in content:
+if not re.search(r'(?ms)^\[\[mcp_servers\]\]\s*\nname\s*=\s*"agentation"\s*\n', content):
     agentation_block = '\n[[mcp_servers]]\nname = "agentation"\ncommand = "npx"\nargs = ["-y", "agentation-mcp", "server"]\n'
     content = content.rstrip() + agentation_block
     print("\u2713 agentation MCP server added to config.toml")
 else:
     print("\u2713 agentation MCP already in config.toml")
 
-# Add [tui] section if missing
-if "[tui]" not in content:
-    content += '\n[tui]\nnotifications = ["agent-turn-complete"]\nnotification_method = "osc9"\n'
-    print("✓ [tui] notifications added")
+# Add or sync [tui] section
+tui_match = re.search(r'(?ms)^\[tui\]\s*\n(.*?)(?=^\[|\Z)', content)
+if not tui_match:
+    content = content.rstrip() + '\n\n[tui]\nnotifications = ["agent-turn-complete"]\nnotification_method = "osc9"\n'
+    print("✓ [tui] section added")
 else:
-    print("✓ [tui] already configured")
+    tui_body = tui_match.group(1)
+    notif_match = re.search(r'(?m)^notifications\s*=\s*\[(.*?)\]\s*$', tui_body)
+    notifications = []
+    if notif_match:
+        notifications = re.findall(r'"([^"]+)"', notif_match.group(1))
+    if "agent-turn-complete" not in notifications:
+        notifications.append("agent-turn-complete")
+    notifications_line = 'notifications = [' + ', '.join(f'"{item}"' for item in notifications) + ']'
+    if notif_match:
+        tui_body = re.sub(r'(?m)^notifications\s*=\s*\[(.*?)\]\s*$', notifications_line, tui_body, count=1)
+    else:
+        tui_body = notifications_line + '\n' + tui_body
+
+    if re.search(r'(?m)^notification_method\s*=', tui_body):
+        tui_body = re.sub(r'(?m)^notification_method\s*=.*$', 'notification_method = "osc9"', tui_body, count=1)
+    else:
+        tui_body = tui_body.rstrip() + '\nnotification_method = "osc9"\n'
+
+    content = content[:tui_match.start(1)] + tui_body + content[tui_match.end(1):]
+    print("✓ [tui] notifications synced")
 
 with open(config_path, "w") as f:
     f.write(content)

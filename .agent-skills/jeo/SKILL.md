@@ -673,8 +673,11 @@ bash scripts/worktree-cleanup.sh
 # 개별 명령
 git worktree list                         # 현재 worktree 목록 확인
 git worktree prune                        # 삭제된 브랜치 worktree 정리
-bash scripts/worktree-cleanup.sh --force  # 강제 정리
+bash scripts/worktree-cleanup.sh --force  # dirty worktree까지 강제 정리
 ```
+
+> 기본 실행은 clean extra worktree만 제거하고, 변경사항이 있는 worktree는 경고 후 남겨둡니다.
+> `--force`는 검토 후에만 사용하세요.
 
 ---
 
@@ -774,6 +777,7 @@ notification_method = "osc9"
 
 > `developer_instructions`는 반드시 **top-level string**이어야 합니다.
 > `[developer_instructions]` 테이블 형식으로 작성하면 Codex가 `invalid type: map, expected a string` 오류로 시작 실패할 수 있습니다.
+> `notify`와 `[tui].notifications`도 함께 맞아야 PLAN/ANNOTATE 후속 루프가 실제로 동작합니다.
 
 Codex에서 사용:
 ```bash
