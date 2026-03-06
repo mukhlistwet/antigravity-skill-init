@@ -13,9 +13,12 @@ info() { echo -e "${BLUE}→${NC} $*"; }
 DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
-# Look for opencode.json in cwd, then home
+# Resolve opencode.json priority:
+# 1) cwd (project-level config), then
+# 2) ~/.config/opencode/opencode.json, then
+# 3) legacy ~/.opencode.json
 OPENCODE_JSON=""
-for candidate in "./opencode.json" "${HOME}/opencode.json" "${HOME}/.config/opencode/opencode.json"; do
+for candidate in "./opencode.json" "${HOME}/.config/opencode/opencode.json" "${HOME}/opencode.json"; do
   [[ -f "$candidate" ]] && OPENCODE_JSON="$candidate" && break
 done
 
@@ -32,7 +35,7 @@ fi
 info "Configuring opencode.json..."
 
 if [[ -z "$OPENCODE_JSON" ]]; then
-  OPENCODE_JSON="./opencode.json"
+  OPENCODE_JSON="${HOME}/.config/opencode/opencode.json"
   warn "No opencode.json found — will create at $OPENCODE_JSON"
 fi
 
@@ -40,6 +43,7 @@ if $DRY_RUN; then
   echo -e "${YELLOW}[DRY-RUN]${NC} Would configure $OPENCODE_JSON with JEO plugin"
 else
   # Backup
+  mkdir -p "$(dirname "$OPENCODE_JSON")"
   [[ -f "$OPENCODE_JSON" ]] && cp "$OPENCODE_JSON" "${OPENCODE_JSON}.jeo.bak"
 
   OPENCODE_JSON_PATH="$OPENCODE_JSON" python3 - <<'PYEOF'
@@ -52,8 +56,13 @@ try:
 except (FileNotFoundError, json.JSONDecodeError):
     config = {}
 
-# Set schema
-config.setdefault("\$schema", "https://opencode.ai/config.json")
+# Set schema (normalize old escaped key if present)
+legacy_schema_key = "\\$schema"
+if legacy_schema_key in config:
+    if "$schema" not in config:
+        config["$schema"] = config[legacy_schema_key]
+    config.pop(legacy_schema_key)
+config.setdefault("$schema", "https://opencode.ai/config.json")
 
 # Add plugins
 plugins = config.setdefault("plugin", [])
