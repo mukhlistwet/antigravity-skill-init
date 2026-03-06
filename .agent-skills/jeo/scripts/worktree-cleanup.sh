@@ -102,7 +102,7 @@ fi
 STATE_FILE=".omc/state/jeo-state.json"
 if [[ -f "$STATE_FILE" ]] && command -v python3 >/dev/null 2>&1; then
   if $DRY_RUN; then
-    echo -e "${YELLOW}[DRY-RUN]${NC} Would update JEO state: phase=cleanup, worktrees=[]"
+    echo -e "${YELLOW}[DRY-RUN]${NC} Would update JEO state: phase=cleanup, cleanup_completed=true"
   else
     python3 - <<'PYEOF'
 import json, os
@@ -110,8 +110,8 @@ state_path = ".omc/state/jeo-state.json"
 try:
     with open(state_path) as f:
         state = json.load(f)
-    state["phase"] = "cleanup"
-    state["worktrees"] = []
+    state["phase"] = "done"
+    # state["worktrees"] = []  # 미구현 필드 — SKILL.md 초기 스키마에서도 제거됨. 향후 멀티-worktree 추적 구현 시 복원.
     state["cleanup_completed"] = True
     with open(state_path, "w") as f:
         json.dump(state, f, indent=2)

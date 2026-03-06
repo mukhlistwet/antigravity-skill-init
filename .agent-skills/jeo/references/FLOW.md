@@ -248,19 +248,17 @@ State persisted in: `.omc/state/jeo-state.json`
   "phase": "plan",
   "task": "Implement user authentication",
   "plan_approved": false,
-  "plan_path": ".omc/plans/jeo-plan.md",
   "team_available": true,
-  "worktrees": [],
-  "bmad_phase": null,
+  "retry_count": 0,
+  "last_error": null,
+  "checkpoint": null,
   "created_at": "2026-02-24T00:00:00Z",
   "updated_at": "2026-02-24T00:00:00Z",
-  "cleanup_completed": false,
   "agentation": {
     "active": false,
     "session_id": null,
     "keyword_used": null,
     "started_at": null,
-    "last_poll_at": null,
     "timeout_seconds": 120,
     "annotations": {
       "total": 0,
@@ -275,11 +273,18 @@ State persisted in: `.omc/state/jeo-state.json`
 }
 ```
 
+**Error recovery fields:**
+- `retry_count`: incremented on each Pre-flight failure; ≥ 3 triggers user confirmation
+- `last_error`: most recent error message; cleared on successful step entry
+- `checkpoint`: last successfully entered phase (`"plan"` | `"execute"` | `"verify"` | `"cleanup"`); used to resume after interruption
+
 **agentation fields:**
 - `active`: whether VERIFY_UI watch loop is currently running (used as guard by hooks)
 - `session_id`: agentation session ID for resume via `agentation_get_session`
 - `keyword_used`: `"annotate"` or `"agentui"` (tracks which keyword triggered entry)
-- `annotations.*`: cumulative counts by lifecycle status
+- `started_at`: ISO-8601 timestamp when VERIFY_UI watch loop started
+- `timeout_seconds`: poll timeout in seconds (default: 120)
+- `annotations.*`: cumulative counts by lifecycle status (`total`, `acknowledged`, `resolved`, `dismissed`, `pending`)
 - `exit_reason`: `"all_resolved"` | `"timeout"` | `"user_cancelled"` | `"error"`
 
 ---

@@ -13,6 +13,8 @@ info() { echo -e "${BLUE}→${NC} $*"; }
 DRY_RUN=false
 [[ "${1:-}" == "--dry-run" ]] && DRY_RUN=true
 
+JEO_SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 CODEX_CONFIG="${HOME}/.codex/config.toml"
 CODEX_PROMPTS_DIR="${HOME}/.codex/prompts"
 JEO_PROMPT_FILE="${CODEX_PROMPTS_DIR}/jeo.md"
@@ -112,7 +114,7 @@ PYEOF
   ok "JEO developer_instructions synced in ~/.codex/config.toml"
 
   # ── 3. Create /prompts:jeo prompt file ──────────────────────────────────────
-  cat > "$JEO_PROMPT_FILE" <<'PROMPTEOF'
+  cat > "$JEO_PROMPT_FILE" <<PROMPTEOF
 # JEO — Integrated Agent Orchestration Prompt
 
 You are now operating in **JEO mode** — Integrated AI Agent Orchestration.
@@ -121,20 +123,20 @@ You are now operating in **JEO mode** — Integrated AI Agent Orchestration.
 
 ### Step 1: PLAN (plannotator — blocking loop)
 Before writing any code, create and review a plan:
-1. Write a detailed implementation plan in `plan.md` (objectives, steps, risks, acceptance criteria)
+1. Write a detailed implementation plan in \`plan.md\` (objectives, steps, risks, acceptance criteria)
 2. Run plannotator BLOCKING (no & — wait for user review):
-   ```bash
+   \`\`\`bash
    python3 -c "import json,sys; plan=open('plan.md').read(); sys.stdout.write(json.dumps({'tool_input':{'plan':plan,'permission_mode':'acceptEdits'}}))" | plannotator > /tmp/plannotator_feedback.txt 2>&1
    echo "PLAN_READY"
-   ```
+   \`\`\`
 3. Read /tmp/plannotator_feedback.txt
-4. If `"approved":true` → proceed to EXECUTE
+4. If \`"approved":true\` → proceed to EXECUTE
 5. If NOT approved → read annotations, revise plan.md, repeat from step 2
 NEVER skip plannotator. NEVER proceed to EXECUTE without approved=true.
 
 ### Step 2: EXECUTE (BMAD workflow for Codex)
 Use BMAD structured phases:
-- `/workflow-init` — Initialize BMAD for this project
+- \`/workflow-init\` — Initialize BMAD for this project
 - Analysis phase: understand requirements fully
 - Planning phase: detailed technical plan
 - Solutioning phase: architecture decisions
@@ -142,38 +144,45 @@ Use BMAD structured phases:
 
 ### Step 3: VERIFY (agent-browser)
 If the task has browser UI:
-- Run: `agent-browser snapshot http://localhost:3000`
+- Run: \`agent-browser snapshot http://localhost:3000\`
 - Check UI elements via accessibility tree (-i flag)
-- Save screenshot: `agent-browser screenshot <url> -o verify.png`
+- Save screenshot: \`agent-browser screenshot <url> -o verify.png\`
 
 ### Step 4: CLEANUP (worktree)
 After all tasks complete:
 - Run: git worktree prune
-- Run: bash .agent-skills/jeo/scripts/worktree-cleanup.sh
+- Run: bash ${JEO_SKILL_DIR}/scripts/worktree-cleanup.sh
 
 ## Key Commands
 - Plan review — run plannotator BLOCKING (no &), then output PLAN_READY:
-  ```bash
+  \`\`\`bash
   python3 -c "import json; print(json.dumps({'tool_input': {'plan': open('plan.md').read(), 'permission_mode': 'acceptEdits'}}))" | plannotator > /tmp/plannotator_feedback.txt 2>&1
   # Output PLAN_READY to trigger notify hook as backup signal
   echo "PLAN_READY"
   # Check result
-  grep -q '"approved":true' /tmp/plannotator_feedback.txt && echo "PLAN_APPROVED — proceed to EXECUTE" || cat /tmp/plannotator_feedback.txt
-  ```
-- Browser verify: `agent-browser snapshot http://localhost:3000`
-- BMAD init: `/workflow-init`
-- Worktree cleanup: `bash .agent-skills/jeo/scripts/worktree-cleanup.sh`
+  python3 -c "
+import json, sys
+try:
+    d = json.load(open('/tmp/plannotator_feedback.txt'))
+    sys.exit(0 if d.get('approved') is True else 1)
+except Exception:
+    sys.exit(1)
+" && echo "PLAN_APPROVED — proceed to EXECUTE" || cat /tmp/plannotator_feedback.txt
+  \`\`\`
+- Browser verify: \`agent-browser snapshot http://localhost:3000\`
+- BMAD init: \`/workflow-init\`
+- Worktree cleanup: \`bash ${JEO_SKILL_DIR}/scripts/worktree-cleanup.sh\`
 
 ## State File
-Save progress to: `.omc/state/jeo-state.json`
-```json
+Save progress to: \`.omc/state/jeo-state.json\`
+\`\`\`json
 {
   "phase": "plan|execute|verify|cleanup",
   "task": "current task description",
   "plan_approved": false,
   "worktrees": []
 }
-```
+\`\`\`
 
 Always check state file on resume to continue from last phase.
 PROMPTEOF
@@ -189,9 +198,9 @@ PROMPTEOF
   cat > "$HOOK_FILE" << 'HOOKEOF'
 #!/usr/bin/env python3
 """JEO Codex notify hook — detects PLAN_READY / ANNOTATE_READY and triggers plannotator / agentation."""
-import json, os, subprocess, sys, urllib.request, urllib.error, time
+import hashlib, json, os, re, subprocess, sys, urllib.request, urllib.error, time
 
-# Exact signal strings (matched at end of message line)
+# Exact signal strings (matched as standalone lines, allowing surrounding whitespace)
 PLAN_SIGNALS = ["PLAN_READY"]
 ANNOTATE_SIGNALS = ["ANNOTATE_READY", "AGENTUI_READY"]
 
@@ -203,6 +212,13 @@ def get_jeo_phase(cwd: str) -> str:
             return json.load(f).get("phase", "")
     except (FileNotFoundError, json.JSONDecodeError, KeyError):
         return ""
+
+def get_feedback_file(cwd: str) -> str:
+    """Return session-isolated feedback file path based on cwd MD5."""
+    _session_key = hashlib.md5(cwd.encode()).hexdigest()[:8]
+    feedback_dir = f"/tmp/jeo-{_session_key}"
+    os.makedirs(feedback_dir, exist_ok=True)
+    return os.path.join(feedback_dir, "plannotator_feedback.txt")
 
 def main() -> int:
     try:
@@ -218,15 +234,21 @@ def main() -> int:
     phase = get_jeo_phase(cwd)
 
     # PLAN_READY: trigger plannotator (only during plan phase)
-    if phase in ("plan", ""):
-        last_line = msg.split("\n")[-1].strip() if msg else ""
-        if any(last_line.endswith(sig) for sig in PLAN_SIGNALS):
-            plan_path = os.path.join(cwd, "plan.md")
-            if not os.path.exists(plan_path):
+    if phase in ("plan",):
+        if any(re.search(rf'(?m)^{re.escape(sig)}\s*$', msg or '') for sig in PLAN_SIGNALS):
+            plan_candidates = ["plan.md", ".omc/plans/jeo-plan.md", "docs/plan.md"]
+            plan_path = None
+            for candidate in plan_candidates:
+                p = os.path.join(cwd, candidate)
+                if os.path.exists(p):
+                    plan_path = p
+                    break
+            if plan_path is None:
+                print("[JEO] plan.md not found in known locations")
                 return 0
             plan_content = open(plan_path).read()
             payload = json.dumps({"tool_input": {"plan": plan_content, "permission_mode": "acceptEdits"}})
-            feedback_file = "/tmp/plannotator_feedback.txt"
+            feedback_file = get_feedback_file(cwd)
             try:
                 with open(feedback_file, "w") as f:
                     subprocess.run(["plannotator"], input=payload, stdout=f, stderr=f, text=True)
@@ -236,9 +258,8 @@ def main() -> int:
             return 0
 
     # ANNOTATE_READY: poll agentation HTTP API (only during verify/verify_ui phase)
-    if phase in ("verify", "verify_ui", ""):
-        last_line = msg.split("\n")[-1].strip() if msg else ""
-        if any(last_line.endswith(sig) for sig in ANNOTATE_SIGNALS):
+    if phase in ("verify", "verify_ui"):
+        if any(re.search(rf'(?m)^{re.escape(sig)}\s*$', msg or '') for sig in ANNOTATE_SIGNALS):
             base_url = "http://localhost:4747"
             try:
                 with urllib.request.urlopen(f"{base_url}/pending", timeout=2) as r:

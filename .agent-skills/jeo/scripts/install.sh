@@ -63,7 +63,7 @@ fi
 echo ""
 echo "╔══════════════════════════════════════════╗"
 echo "║   JEO Skill — Integrated Orchestration  ║"
-echo "║   Version 1.0.0                          ║"
+echo "║   Version 1.1.0                          ║"
 echo "╚══════════════════════════════════════════╝"
 echo ""
 
@@ -86,7 +86,14 @@ info "Detected OS: $OS"
 # ── Check prerequisites ────────────────────────────────────────────────────────
 info "Checking prerequisites..."
 MISSING_DEPS=()
-command -v node >/dev/null 2>&1 || MISSING_DEPS+=("node (>=18)")
+if command -v node >/dev/null 2>&1; then
+  NODE_VER=$(node --version 2>/dev/null | grep -oE '[0-9]+' | head -1)
+  if [[ -z "$NODE_VER" ]] || [[ "$NODE_VER" -lt 18 ]]; then
+    MISSING_DEPS+=("node >=18 (현재: $(node --version 2>/dev/null || echo 'unknown'))")
+  fi
+else
+  MISSING_DEPS+=("node >=18")
+fi
 command -v npm >/dev/null 2>&1  || MISSING_DEPS+=("npm")
 command -v git >/dev/null 2>&1  || MISSING_DEPS+=("git")
 command -v bash >/dev/null 2>&1 || MISSING_DEPS+=("bash")

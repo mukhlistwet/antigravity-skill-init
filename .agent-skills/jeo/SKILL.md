@@ -7,7 +7,7 @@ metadata:
   tags: jeo, orchestration, ralph, plannotator, agentation, annotate, agentui, UI검토, team, bmad, omc, omx, ohmg, agent-browser, multi-agent, workflow, worktree-cleanup, browser-verification, ui-feedback
   platforms: Claude, Codex, Gemini, OpenCode
   keyword: jeo
-  version: 1.0.0
+  version: 1.1.0
   source: supercent-io/skills-template
 ---
 
@@ -33,13 +33,15 @@ mkdir -p .omc/state .omc/plans .omc/logs
 
 `.omc/state/jeo-state.json` 이 없으면 생성:
 
+<!-- NOTE: `worktrees` 배열은 미구현 상태로 초기 스키마에서 제거했습니다.
+     향후 멀티-worktree 병렬 실행 추적이 필요할 때 다시 추가하세요.
+     worktree-cleanup.sh는 git worktree list를 직접 조회하므로 이 필드 없이도 동작합니다. -->
 ```json
 {
   "phase": "plan",
   "task": "<감지된 task>",
   "plan_approved": false,
   "team_available": null,
-  "worktrees": [],
   "retry_count": 0,
   "last_error": null,
   "checkpoint": null,
@@ -69,27 +71,50 @@ mkdir -p .omc/state .omc/plans .omc/logs
 ```python
 # 각 STEP 시작 시 즉시 실행 (에이전트가 직접 jeo-state.json 업데이트)
 python3 -c "
-import json, datetime, os
-f='.omc/state/jeo-state.json'
+import json, datetime, os, subprocess, tempfile
+try:
+    root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root = os.getcwd()
+f = os.path.join(root, '.omc/state/jeo-state.json')
 if os.path.exists(f):
-    d=json.load(open(f))
-    d['checkpoint']='<current_phase>'   # 'plan'|'execute'|'verify'|'cleanup'
-    d['updated_at']=datetime.datetime.utcnow().isoformat()+'Z'
-    json.dump(d,open(f,'w'),indent=2)
+    import fcntl
+    with open(f, 'r+') as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            d = json.load(fh)
+            d['checkpoint']='<current_phase>'   # 'plan'|'execute'|'verify'|'cleanup'
+            d['updated_at']=datetime.datetime.utcnow().isoformat()+'Z'
+            fh.seek(0)
+            json.dump(d, fh, ensure_ascii=False, indent=2)
+            fh.truncate()
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 " 2>/dev/null || true
 ```
 
 **last_error 기록 — Pre-flight 실패 또는 예외 발생 시:**
 ```python
 python3 -c "
-import json, datetime, os
-f='.omc/state/jeo-state.json'
+import json, datetime, os, subprocess, fcntl
+try:
+    root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root = os.getcwd()
+f = os.path.join(root, '.omc/state/jeo-state.json')
 if os.path.exists(f):
-    d=json.load(open(f))
-    d['last_error']='<에러 메시지>'
-    d['retry_count']=d.get('retry_count',0)+1
-    d['updated_at']=datetime.datetime.utcnow().isoformat()+'Z'
-    json.dump(d,open(f,'w'),indent=2)
+    with open(f, 'r+') as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            d = json.load(fh)
+            d['last_error']='<에러 메시지>'
+            d['retry_count']=d.get('retry_count',0)+1
+            d['updated_at']=datetime.datetime.utcnow().isoformat()+'Z'
+            fh.seek(0)
+            json.dump(d, fh, ensure_ascii=False, indent=2)
+            fh.truncate()
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
 " 2>/dev/null || true
 ```
 
@@ -97,8 +122,12 @@ if os.path.exists(f):
 ```python
 # jeo-state.json이 이미 존재하면 checkpoint에서 재개
 python3 -c "
-import json, os
-f='.omc/state/jeo-state.json'
+import json, os, subprocess
+try:
+    root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root = os.getcwd()
+f = os.path.join(root, '.omc/state/jeo-state.json')
 if os.path.exists(f):
     d=json.load(open(f))
     cp=d.get('checkpoint')
@@ -118,13 +147,85 @@ if os.path.exists(f):
 **Pre-flight (진입 전 필수):**
 ```bash
 # checkpoint 기록
-python3 -c "import json,datetime,os; f='.omc/state/jeo-state.json'; d=json.load(open(f)) if os.path.exists(f) else {}; d.update({'checkpoint':'plan','updated_at':datetime.datetime.utcnow().isoformat()+'Z'}); json.dump(d,open(f,'w'),indent=2)" 2>/dev/null || true
+python3 -c "
+import json,datetime,os,subprocess,fcntl,tempfile
+try:
+    root=subprocess.check_output(['git','rev-parse','--show-toplevel'],stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root=os.getcwd()
+f=os.path.join(root,'.omc/state/jeo-state.json')
+if os.path.exists(f):
+    with open(f,'r+') as fh:
+        fcntl.flock(fh,fcntl.LOCK_EX)
+        try:
+            d=json.load(fh)
+            d.update({'checkpoint':'plan','updated_at':datetime.datetime.utcnow().isoformat()+'Z'})
+            fh.seek(0); json.dump(d,fh,ensure_ascii=False,indent=2); fh.truncate()
+        finally:
+            fcntl.flock(fh,fcntl.LOCK_UN)
+" 2>/dev/null || true
 
-# plannotator 확인
-command -v plannotator >/dev/null 2>&1 || {
-  python3 -c "import json,datetime,os; f='.omc/state/jeo-state.json'; d=json.load(open(f)) if os.path.exists(f) else {}; d.update({'last_error':'plannotator 미설치','retry_count':d.get('retry_count',0)+1,'updated_at':datetime.datetime.utcnow().isoformat()+'Z'}); json.dump(d,open(f,'w'),indent=2)" 2>/dev/null || true
-  echo "❌ plannotator 미설치 — bash scripts/install.sh --with-plannotator"; exit 1
-}
+# plannotator 가용 여부 확인 (미설치 시 텍스트 fallback — exit 1 없음)
+PLANNOTATOR_AVAILABLE=false
+command -v plannotator >/dev/null 2>&1 && PLANNOTATOR_AVAILABLE=true
+
+if ! $PLANNOTATOR_AVAILABLE; then
+  echo ""
+  echo "⚠️  plannotator 미설치 — 텍스트 기반 계획 검토 모드로 진행합니다"
+  echo "   (시각적 검토를 원하면: bash scripts/install.sh --with-plannotator)"
+  echo ""
+  echo "📋 PLAN 내용 (plan.md):"
+  echo "---"
+  cat plan.md 2>/dev/null || echo "(plan.md 없음)"
+  echo "---"
+  echo ""
+  echo "위 계획을 검토하고 계속 진행합니다."
+  echo "❗ 계획에 문제가 있으면 지금 Ctrl+C로 중단하세요."
+  echo ""
+  # plan_approved를 true로 설정하되 fallback 방식임을 기록
+  python3 -c "
+import json, subprocess, os, fcntl, time
+try:
+    root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.DEVNULL).decode().strip()
+except Exception:
+    root = os.getcwd()
+f = os.path.join(root, '.omc/state/jeo-state.json')
+try:
+    with open(f, 'r+') as fh:
+        fcntl.flock(fh, fcntl.LOCK_EX)
+        try:
+            d = json.load(fh)
+            d['plan_approved'] = True
+            d['plan_review_method'] = 'text_fallback'
+            d['checkpoint'] = 'plan_reviewed'
+            d['updated_at'] = time.strftime('%Y-%m-%dT%H:%M:%SZ', time.gmtime())
+            fh.seek(0)
+            json.dump(d, fh, ensure_ascii=False, indent=2)
+            fh.truncate()
+        finally:
+            fcntl.flock(fh, fcntl.LOCK_UN)
+except Exception as e:
+    print(f'[JEO] state update error: {e}')
+" 2>/dev/null || true
+else
+  # plannotator 정상 실행 경로 (기존 코드)
+  FEEDBACK_DIR=$(python3 -c "import hashlib,os; h=hashlib.md5(os.getcwd().encode()).hexdigest()[:8]; d=f'/tmp/jeo-{h}'; os.makedirs(d,exist_ok=True); print(d)" 2>/dev/null || echo '/tmp')
+  FEEDBACK_FILE="${FEEDBACK_DIR}/plannotator_feedback.txt"
+  touch /tmp/jeo-plannotator-direct.lock && cat plan.md | plannotator > "$FEEDBACK_FILE" 2>&1
+
+  # approved 확인
+  python3 -c "
+import json, sys
+try:
+    d = json.load(open('$FEEDBACK_FILE'))
+    sys.exit(0 if d.get('approved') is True else 1)
+except Exception:
+    sys.exit(1)
+" && echo "✅ 계획 승인됨" || {
+    echo "❌ 계획 미승인 또는 수정 요청됨 — plan.md를 수정 후 재시도하세요"
+    exit 1
+  }
+fi
 mkdir -p .omc/plans .omc/logs
 ```
 
@@ -133,7 +234,7 @@ mkdir -p .omc/plans .omc/logs
    - **Claude Code**: `submit_plan` MCP 도구 직접 호출
    - **Codex / Gemini / OpenCode**: blocking CLI 실행 (`&` 절대 금지):
      ```bash
-     python3 -c "import json,sys; plan=open('plan.md').read(); sys.stdout.write(json.dumps({'tool_input':{'plan':plan,'permission_mode':'acceptEdits'}}))" | plannotator > /tmp/plannotator_feedback.txt 2>&1
+     touch /tmp/jeo-plannotator-direct.lock && python3 -c "import json,sys; plan=open('plan.md').read(); sys.stdout.write(json.dumps({'tool_input':{'plan':plan,'permission_mode':'acceptEdits'}}))" | plannotator > /tmp/plannotator_feedback.txt 2>&1
      ```
 3. 결과 확인:
    - `approved: true` → `jeo-state.json`의 `phase`를 `"execute"`, `plan_approved`를 `true`로 업데이트 → **STEP 2 진입**
@@ -148,14 +249,56 @@ mkdir -p .omc/plans .omc/logs
 **Pre-flight (team 가용 여부 자동 감지):**
 ```bash
 # checkpoint 기록
-python3 -c "import json,datetime,os; f='.omc/state/jeo-state.json'; d=json.load(open(f)) if os.path.exists(f) else {}; d.update({'checkpoint':'execute','updated_at':datetime.datetime.utcnow().isoformat()+'Z'}); json.dump(d,open(f,'w'),indent=2)" 2>/dev/null || true
+python3 -c "
+import json,datetime,os,subprocess,fcntl
+try:
+    root=subprocess.check_output(['git','rev-parse','--show-toplevel'],stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root=os.getcwd()
+f=os.path.join(root,'.omc/state/jeo-state.json')
+if os.path.exists(f):
+    with open(f,'r+') as fh:
+        fcntl.flock(fh,fcntl.LOCK_EX)
+        try:
+            d=json.load(fh)
+            d.update({'checkpoint':'execute','updated_at':datetime.datetime.utcnow().isoformat()+'Z'})
+            fh.seek(0); json.dump(d,fh,ensure_ascii=False,indent=2); fh.truncate()
+        finally:
+            fcntl.flock(fh,fcntl.LOCK_UN)
+" 2>/dev/null || true
 
 TEAM_AVAILABLE=false
-if [[ -n "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" ]] || \
-   grep -q "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" "${HOME}/.claude/settings.json" 2>/dev/null; then
+if [[ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" =~ ^(1|true|True|yes|YES)$ ]]; then
+  TEAM_AVAILABLE=true
+elif python3 -c "
+import json, os, sys
+try:
+    s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
+    val = s.get('env', {}).get('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', '')
+    sys.exit(0 if str(val) in ('1', 'true', 'True', 'yes') else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
   TEAM_AVAILABLE=true
 fi
-python3 -c "import json,os; f='.omc/state/jeo-state.json'; d=json.load(open(f)); d['team_available']=('${TEAM_AVAILABLE}'=='true'); json.dump(d,open(f,'w'),indent=2)" 2>/dev/null || true
+export TEAM_AVAILABLE_BOOL="$TEAM_AVAILABLE"
+python3 -c "
+import json,os,subprocess,fcntl
+try:
+    root=subprocess.check_output(['git','rev-parse','--show-toplevel'],stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root=os.getcwd()
+f=os.path.join(root,'.omc/state/jeo-state.json')
+if os.path.exists(f):
+    with open(f,'r+') as fh:
+        fcntl.flock(fh,fcntl.LOCK_EX)
+        try:
+            d=json.load(fh)
+            d['team_available']=os.environ.get('TEAM_AVAILABLE_BOOL','false').lower()=='true'
+            fh.seek(0); json.dump(d,fh,ensure_ascii=False,indent=2); fh.truncate()
+        finally:
+            fcntl.flock(fh,fcntl.LOCK_UN)
+" 2>/dev/null || true
 ```
 
 1. `jeo-state.json`의 `phase`를 `"execute"`로 업데이트
@@ -187,7 +330,28 @@ python3 -c "import json,os; f='.omc/state/jeo-state.json'; d=json.load(open(f));
 
 1. Pre-flight 확인 (진입 전 필수):
    ```bash
-   curl -sf --connect-timeout 2 http://localhost:4747/health || { echo '❌ agentation-mcp 미실행'; exit 1; }
+   if ! curl -sf --connect-timeout 2 http://localhost:4747/health >/dev/null 2>&1; then
+     echo "⚠️  agentation-mcp 서버 미실행 — VERIFY_UI 건너뛰고 CLEANUP으로 진행합니다"
+     python3 -c "
+import json,os,subprocess,fcntl,time
+try:
+    root=subprocess.check_output(['git','rev-parse','--show-toplevel'],stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root=os.getcwd()
+f=os.path.join(root,'.omc/state/jeo-state.json')
+if os.path.exists(f):
+    with open(f,'r+') as fh:
+        fcntl.flock(fh,fcntl.LOCK_EX)
+        try:
+            d=json.load(fh)
+            d['last_error']='agentation-mcp not running; VERIFY_UI skipped'
+            d['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+            fh.seek(0); json.dump(d,fh,ensure_ascii=False,indent=2); fh.truncate()
+        finally:
+            fcntl.flock(fh,fcntl.LOCK_UN)
+" 2>/dev/null || true
+     # STEP 4 CLEANUP으로 진행 (exit 1 없음 — graceful skip)
+   fi
    ```
 2. `jeo-state.json` 업데이트: `phase = "verify_ui"`, `agentation.active = true`
 3. **Claude Code (MCP)**: `agentation_watch_annotations` 블로킹 호출 (`batchWindowSeconds:10`, `timeoutSeconds:120`)
@@ -202,7 +366,23 @@ python3 -c "import json,os; f='.omc/state/jeo-state.json'; d=json.load(open(f));
 **Pre-flight (진입 전 확인):**
 ```bash
 # checkpoint 기록
-python3 -c "import json,datetime,os; f='.omc/state/jeo-state.json'; d=json.load(open(f)) if os.path.exists(f) else {}; d.update({'checkpoint':'cleanup','updated_at':datetime.datetime.utcnow().isoformat()+'Z'}); json.dump(d,open(f,'w'),indent=2)" 2>/dev/null || true
+python3 -c "
+import json,datetime,os,subprocess,fcntl
+try:
+    root=subprocess.check_output(['git','rev-parse','--show-toplevel'],stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root=os.getcwd()
+f=os.path.join(root,'.omc/state/jeo-state.json')
+if os.path.exists(f):
+    with open(f,'r+') as fh:
+        fcntl.flock(fh,fcntl.LOCK_EX)
+        try:
+            d=json.load(fh)
+            d.update({'checkpoint':'cleanup','updated_at':datetime.datetime.utcnow().isoformat()+'Z'})
+            fh.seek(0); json.dump(d,fh,ensure_ascii=False,indent=2); fh.truncate()
+        finally:
+            fcntl.flock(fh,fcntl.LOCK_UN)
+" 2>/dev/null || true
 
 if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
   echo "⚠️ git 저장소 아님 — worktree 정리 건너뜀"
@@ -307,18 +487,29 @@ jeo "<task>"
 
 **Codex / Gemini / OpenCode (대체):**
 ```bash
+# 세션 격리 피드백 디렉토리 (동시 실행 충돌 방지)
+FEEDBACK_DIR=$(python3 -c "import hashlib,os; h=hashlib.md5(os.getcwd().encode()).hexdigest()[:8]; d=f'/tmp/jeo-{h}'; os.makedirs(d,exist_ok=True); print(d)" 2>/dev/null || echo '/tmp')
+FEEDBACK_FILE="${FEEDBACK_DIR}/plannotator_feedback.txt"
+
 # 1. plan.md 직접 작성 후 plannotator로 검토 (블로킹 실행 — & 없음)
-python3 -c "
+touch /tmp/jeo-plannotator-direct.lock && python3 -c "
 import json
 print(json.dumps({'tool_input': {'plan': open('plan.md').read(), 'permission_mode': 'acceptEdits'}}))
-" | plannotator > /tmp/plannotator_feedback.txt 2>&1
+" | plannotator > "$FEEDBACK_FILE" 2>&1
 # ↑ & 없이 실행: 사용자가 브라우저에서 Approve/Send Feedback 클릭까지 대기
 
 # 2. 결과 확인 후 분기
-if grep -q '"approved":true' /tmp/plannotator_feedback.txt 2>/dev/null; then
+if python3 -c "
+import json, sys
+try:
+    d = json.load(open('$FEEDBACK_FILE'))
+    sys.exit(0 if d.get('approved') is True else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
   echo "PLAN_APPROVED"   # → EXECUTE 단계 진입
 else
-  echo "PLAN_FEEDBACK"   # → cat /tmp/plannotator_feedback.txt 읽고 재계획 후 위 과정 반복
+  echo "PLAN_FEEDBACK"   # → cat \"$FEEDBACK_FILE\" 읽고 재계획 후 위 과정 반복
 fi
 ```
 
@@ -383,22 +574,43 @@ plannotator가 `planui` / `ExitPlanMode`에서 동작하는 방식과 동일한 
 
 **Pre-flight Check (진입 전 확인 — 모든 플랫폼 공통):**
 ```bash
-# Step 1: 서버 상태 확인
-curl -sf --connect-timeout 2 http://localhost:4747/health >/dev/null 2>&1 \
-  || { echo "❌ agentation-mcp 서버 미실행 — npx agentation-mcp server 실행 필요"; exit 1; }
+# Step 1: 서버 상태 확인 (미실행 시 graceful skip — exit 1 없음)
+if ! curl -sf --connect-timeout 2 http://localhost:4747/health >/dev/null 2>&1; then
+  echo "⚠️  agentation-mcp 서버 미실행 — VERIFY_UI 건너뛰고 CLEANUP으로 진행합니다"
+  echo "   (agentation 사용 시: npx agentation-mcp server)"
+  python3 -c "
+import json,os,subprocess,fcntl,time
+try:
+    root=subprocess.check_output(['git','rev-parse','--show-toplevel'],stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root=os.getcwd()
+f=os.path.join(root,'.omc/state/jeo-state.json')
+if os.path.exists(f):
+    with open(f,'r+') as fh:
+        fcntl.flock(fh,fcntl.LOCK_EX)
+        try:
+            d=json.load(fh)
+            d['last_error']='agentation-mcp not running; VERIFY_UI skipped'
+            d['updated_at']=time.strftime('%Y-%m-%dT%H:%M:%SZ',time.gmtime())
+            fh.seek(0); json.dump(d,fh,ensure_ascii=False,indent=2); fh.truncate()
+        finally:
+            fcntl.flock(fh,fcntl.LOCK_UN)
+" 2>/dev/null || true
+  # STEP 4 CLEANUP으로 진행 (exit 1 없음 — graceful skip)
+else
+  # Step 2: 세션 존재 확인 (<Agentation> 컴포넌트 마운트 여부)
+  SESSIONS=$(curl -sf http://localhost:4747/sessions 2>/dev/null)
+  S_COUNT=$(echo "$SESSIONS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
+  [ "$S_COUNT" -eq 0 ] && echo "⚠️ 활성 세션 없음 — <Agentation endpoint='http://localhost:4747' /> 마운트 필요"
 
-# Step 2: 세션 존재 확인 (<Agentation> 컴포넌트 마운트 여부)
-SESSIONS=$(curl -sf http://localhost:4747/sessions 2>/dev/null)
-S_COUNT=$(echo "$SESSIONS" | python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev/null || echo 0)
-[ "$S_COUNT" -eq 0 ] && echo "⚠️ 활성 세션 없음 — <Agentation endpoint='http://localhost:4747' /> 마운트 필요"
-
-# Step 3: 대기 annotation 확인
-PENDING=$(curl -sf http://localhost:4747/pending 2>/dev/null)
-P_COUNT=$(echo "$PENDING" | python3 -c "import sys,json; print(json.load(sys.stdin)['count'])" 2>/dev/null || echo 0)
-echo "✅ agentation 준비 완료 — 서버 정상, 세션 ${S_COUNT}개, 대기 annotation ${P_COUNT}개"
+  # Step 3: 대기 annotation 확인
+  PENDING=$(curl -sf http://localhost:4747/pending 2>/dev/null)
+  P_COUNT=$(echo "$PENDING" | python3 -c "import sys,json; print(json.load(sys.stdin)['count'])" 2>/dev/null || echo 0)
+  echo "✅ agentation 준비 완료 — 서버 정상, 세션 ${S_COUNT}개, 대기 annotation ${P_COUNT}개"
+fi
 ```
 
-> Pre-flight 통과 후 jeo-state.json `phase`를 `"verify_ui"`로 업데이트하고 `agentation.active`를 `true`로 설정.
+> Pre-flight 통과 후(`else` 분기) jeo-state.json `phase`를 `"verify_ui"`로 업데이트하고 `agentation.active`를 `true`로 설정.
 
 **Claude Code (MCP 도구 직접 호출):**
 ```
@@ -420,23 +632,36 @@ echo "✅ agentation 준비 완료 — 서버 정상, 세션 ${S_COUNT}개, 대�
 
 **Codex / Gemini / OpenCode (HTTP REST API 폴백):**
 ```bash
-# 1. Pending annotations 조회 (없으면 종료)
-PENDING=$(curl -sf http://localhost:4747/pending 2>/dev/null)
-COUNT=$(echo "$PENDING" | python3 -c "import sys,json; print(json.load(sys.stdin)['count'])" 2>/dev/null || echo 0)
-[ "$COUNT" -eq 0 ] && echo 'No pending annotations — done' && exit 0
+START_TIME=$(date +%s)
+TIMEOUT_SECONDS=120
 
-# 2. 각 annotation 보내 루프 (다음 코드를 count=0이 될 때까지 반복)
-# a) Acknowledge (처리 중 표시)
-curl -X PATCH http://localhost:4747/annotations/<id> \
-  -H 'Content-Type: application/json' \
-  -d '{"status": "acknowledged"}'
+while true; do
+  # 타임아웃 체크
+  NOW=$(date +%s)
+  ELAPSED=$((NOW - START_TIME))
+  if [ $ELAPSED -ge $TIMEOUT_SECONDS ]; then
+    echo "[JEO] agentation 폴링 타임아웃 (${TIMEOUT_SECONDS}s) — 미해결 annotation이 남아있을 수 있습니다"
+    break
+  fi
 
-# b) elementPath (CSS selector)로 코드 탐색 → 수정 적용
+  COUNT=$(curl -sf --connect-timeout 3 --max-time 5 http://localhost:4747/pending 2>/dev/null | python3 -c "import sys,json; data=sys.stdin.read(); d=json.loads(data) if data.strip() else {}; print(d.get('count', len(d.get('annotations', [])) if isinstance(d, dict) else 0))" 2>/dev/null || echo 0)
+  [ "$COUNT" -eq 0 ] && break
 
-# c) Resolve (완료 표시 + 수정 요약)
-curl -X PATCH http://localhost:4747/annotations/<id> \
-  -H 'Content-Type: application/json' \
-  -d '{"status": "resolved", "resolution": "<수정 요약>"}'
+  # 각 annotation 처리:
+  # a) Acknowledge (처리 중 표시)
+  curl -X PATCH http://localhost:4747/annotations/<id> \
+    -H 'Content-Type: application/json' \
+    -d '{"status": "acknowledged"}'
+
+  # b) elementPath (CSS selector)로 코드 탐색 → 수정 적용
+
+  # c) Resolve (완료 표시 + 수정 요약)
+  curl -X PATCH http://localhost:4747/annotations/<id> \
+    -H 'Content-Type: application/json' \
+    -d '{"status": "resolved", "resolution": "<수정 요약>"}'
+
+  sleep 3
+done
 ```
 
 ### 3.4 CLEANUP 단계 (worktree 자동 정리)
@@ -635,7 +860,7 @@ OpenCode 슬래시 커맨드:
 **plannotator 연동** (MANDATORY blocking loop):
 ```bash
 # plan.md 작성 후 blocking 실행 (& 금지) — 같은 턴 피드백 수신
-python3 -c "import json,sys; plan=open('plan.md').read(); sys.stdout.write(json.dumps({'tool_input':{'plan':plan,'permission_mode':'acceptEdits'}}))" | plannotator > /tmp/plannotator_feedback.txt 2>&1
+touch /tmp/jeo-plannotator-direct.lock && python3 -c "import json,sys; plan=open('plan.md').read(); sys.stdout.write(json.dumps({'tool_input':{'plan':plan,'permission_mode':'acceptEdits'}}))" | plannotator > /tmp/plannotator_feedback.txt 2>&1
 
 # 결과 확인 후 분기
 # approved=true  → EXECUTE 진입
@@ -675,7 +900,6 @@ JEO는 아래 경로에 상태를 저장합니다:
   "task": "현재 작업 설명",
   "plan_approved": true,
   "team_available": true,
-  "worktrees": ["path/to/worktree1", "path/to/worktree2"],
   "retry_count": 0,
   "last_error": null,
   "checkpoint": "plan|execute|verify|verify_ui|cleanup",
@@ -708,8 +932,12 @@ JEO는 아래 경로에 상태를 저장합니다:
 ```bash
 # 재시작 시 checkpoint 확인
 python3 -c "
-import json, os
-f='.omc/state/jeo-state.json'
+import json, os, subprocess
+try:
+    root = subprocess.check_output(['git', 'rev-parse', '--show-toplevel'], stderr=subprocess.DEVNULL).decode().strip()
+except:
+    root = os.getcwd()
+f = os.path.join(root, '.omc/state/jeo-state.json')
 if os.path.exists(f):
     d=json.load(open(f))
     cp=d.get('checkpoint')

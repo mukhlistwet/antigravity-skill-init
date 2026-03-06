@@ -66,7 +66,21 @@ if [[ -f "${HOME}/.claude/settings.json" ]]; then
   else
     warn "Claude Code — plannotator hook not found in settings.json"; ((WARN++)) || true
   fi
-  if grep -q "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS" "${HOME}/.claude/settings.json" 2>/dev/null; then
+  TEAMS_ENABLED=false
+  if [[ "${CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS:-}" =~ ^(1|true|True|yes|YES)$ ]]; then
+    TEAMS_ENABLED=true
+  elif python3 -c "
+import json, os, sys
+try:
+    s = json.load(open(os.path.expanduser('~/.claude/settings.json')))
+    val = s.get('env', {}).get('CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS', '')
+    sys.exit(0 if str(val) in ('1', 'true', 'True', 'yes') else 1)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
+    TEAMS_ENABLED=true
+  fi
+  if $TEAMS_ENABLED; then
     ok "Claude Code — experimental agent teams enabled"; ((PASS++)) || true
   else
     warn "Claude Code — experimental agent teams not enabled"; ((WARN++)) || true
@@ -136,7 +150,8 @@ echo ""
 
 # ── JEO State ─────────────────────────────────────────────────────────────────
 info "JEO State"
-STATE_FILE=".omc/state/jeo-state.json"
+GIT_ROOT=$(git rev-parse --show-toplevel 2>/dev/null || pwd)
+STATE_FILE="$GIT_ROOT/.omc/state/jeo-state.json"
 if [[ -f "$STATE_FILE" ]]; then
   ok "State file found: $STATE_FILE"
   if command -v python3 >/dev/null 2>&1; then
@@ -161,22 +176,26 @@ else
     info "Initializing fresh JEO state file for new session..."
     mkdir -p ".omc/state"
     python3 - <<'PYEOF'
-import json, datetime, os
+import json, datetime, os, uuid
 now = datetime.datetime.utcnow().isoformat() + "Z"
 state = {
+    "mode": "jeo",
     "phase": "plan",
-    "task": "",
+    "session_id": str(uuid.uuid4()),
+    "task": "resumed session",
     "plan_approved": False,
-    "plan_path": ".omc/plans/jeo-plan.md",
-    "team_available": False,
-    "worktrees": [],
-    "retry_count": 0,
-    "last_error": None,
+    "plan_review_method": None,
     "checkpoint": None,
-    "bmad_phase": None,
+    "last_error": None,
+    "retry_count": 0,
+    "team_available": False,
+    "agentation": {
+        "active": False,
+        "session_id": None,
+        "annotations": {"pending": 0, "acknowledged": 0, "resolved": 0}
+    },
     "created_at": now,
-    "updated_at": now,
-    "cleanup_completed": False
+    "updated_at": now
 }
 os.makedirs(".omc/state", exist_ok=True)
 os.makedirs(".omc/plans", exist_ok=True)

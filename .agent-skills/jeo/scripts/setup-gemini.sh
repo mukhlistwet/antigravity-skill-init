@@ -15,6 +15,8 @@ for arg in "$@"; do
   case $arg in --dry-run) DRY_RUN=true ;; --hook-only) HOOK_ONLY=true ;; --md-only) MD_ONLY=true ;; esac
 done
 
+JEO_SKILL_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
 GEMINI_SETTINGS="${HOME}/.gemini/settings.json"
 GEMINI_MD="${HOME}/.gemini/GEMINI.md"
 
@@ -56,9 +58,24 @@ JEO_STATE="${PWD}/.omc/state/jeo-state.json"
 if [[ ! -f "$JEO_STATE" ]]; then
   exit 0  # JEO is not active — no state file
 fi
-PHASE=$(python3 -c "import json; print(json.load(open('$JEO_STATE')).get('phase',''))" 2>/dev/null || echo "")
-# Only run plannotator during plan phase
-if [[ -n "$PHASE" && "$PHASE" != "plan" ]]; then
+PHASE=$(python3 -c "
+import json, sys
+try:
+    d = json.load(open('$JEO_STATE'))
+    print(d.get('phase', 'unknown'))
+except Exception:
+    print('unknown')
+" 2>/dev/null || echo "unknown")
+
+# 화이트리스트: "plan"일 때만 실행, 그 외(unknown, done, execute 등) 모두 종료
+if [[ "$PHASE" != "plan" ]]; then
+  exit 0
+fi
+
+# AfterAgent 이중 실행 방지: 에이전트가 직접 호출한 턴이면 건너뜀
+LOCK_FILE="/tmp/jeo-plannotator-direct.lock"
+if [[ -f "$LOCK_FILE" ]]; then
+  rm -f "$LOCK_FILE"
   exit 0
 fi
 
@@ -221,7 +238,7 @@ NEVER skip plannotator. NEVER proceed to EXECUTE without approved=true.
 - UI/기능 정상 여부 확인
 
 **CLEANUP** (worktree):
-- After all work: `bash .agent-skills/jeo/scripts/worktree-cleanup.sh`
+- After all work: `bash '"${JEO_SKILL_DIR}"'/scripts/worktree-cleanup.sh`
 
 **ANNOTATE** (agentation watch loop — HTTP API 폴백):
 When user says "annotate" or "agentui" (deprecated alias) or asks to process UI annotations:
